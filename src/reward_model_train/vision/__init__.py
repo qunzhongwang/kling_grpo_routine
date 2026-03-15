@@ -1,4 +1,5 @@
-from reward_model_train.vision.process import (
+# Re-export from qwen-vl-utils (installed via pip)
+from qwen_vl_utils import (
     extract_vision_info,
     fetch_image,
     fetch_video,

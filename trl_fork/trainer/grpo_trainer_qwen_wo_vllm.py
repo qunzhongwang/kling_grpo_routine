@@ -80,7 +80,7 @@ if is_vllm_available():
 if is_wandb_available():
     import wandb
 
-from reward_model_train.vision import process_vision_info
+from qwen_vl_utils import process_vision_info
 
 # What we call a reward function is a callable that takes a list of prompts and completions and returns a list of
 # rewards. When it's a string, it's a model ID, so it's loaded as a pretrained model.
