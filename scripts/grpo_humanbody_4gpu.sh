@@ -1,15 +1,15 @@
 experiment_name=grpo_human_body
 
-CUDA_VISIBLE_DEVICES=1,2,3,4,5,6 accelerate launch --config_file configs/deepspeed/zero3_6gpu_offload.yaml \
+CUDA_VISIBLE_DEVICES=0,1,2,3 accelerate launch --config_file configs/deepspeed/zero2_4gpu.yaml \
     -m reward_model_train.cli.grpo_train \
     --dataset_name "/m2v_intern/wangqunzhong/research/asset/kwai_data/dataset" \
     --output_dir log/model_checkpoints/$experiment_name \
     --remove_unused_columns False \
     --learning_rate 5e-6 \
     --per_device_train_batch_size 4 \
-    --gradient_accumulation_steps 12 \
+    --gradient_accumulation_steps 8 \
     --num_iterations 8 \
-    --num_generations 288 \
+    --num_generations 128 \
     --model_name_or_path "Qwen/Qwen2.5-VL-7B-Instruct" \
     --report_to "wandb" \
     --logging_steps 1 \
@@ -27,7 +27,6 @@ CUDA_VISIBLE_DEVICES=1,2,3,4,5,6 accelerate launch --config_file configs/deepspe
     --data_select_ratio 0.05 \
     --cache_dir "/m2v_intern/wangqunzhong/research/asset/huggingface/model/Qwen/Qwen2.5-VL-7B-Chat" \
     --torch_dtype "bfloat16" \
-    --debug_entry_point True \
     --data_source "video" \
     --do_train True \
     --bf16 True \

@@ -61,8 +61,8 @@ uv sync
 # Single-GPU debug run
 bash scripts/grpo_humanbody_1gpu_debug.sh
 
-# Multi-GPU training (7 GPUs, ZeRO-3)
-bash scripts/grpo_humanbody_7gpu_zero3.sh
+# Multi-GPU training (8 GPUs)
+bash scripts/grpo_humanbody_8gpu.sh
 
 # Or use the CLI entry point directly
 uv run accelerate launch --config_file configs/deepspeed/zero2_1gpu.yaml \
@@ -91,10 +91,11 @@ Pre-built configs in `configs/deepspeed/`:
 | Config | GPUs | ZeRO Stage | CPU Offload |
 |--------|------|------------|-------------|
 | `zero2_1gpu.yaml` | 1 | 2 | No |
+| `zero2_2gpu.yaml` | 2 | 2 | No |
+| `zero2_4gpu.yaml` | 4 | 2 | No |
 | `zero2_8gpu.yaml` | 8 | 2 | No |
-| `zero3_6gpu_offload.yaml` | 6 | 3 | Optimizer |
-| `zero3_7gpu_offload.yaml` | 7 | 3 | Optimizer |
 | `zero3_8gpu_offload.yaml` | 8 | 3 | Optimizer |
+| `zero3_2x8gpu_offload.yaml` | 2x8 (16) | 3 | Optimizer |
 
 ### wandb Logging
 
@@ -147,7 +148,7 @@ reward-model-train/
 │   ├── vision/                            #   Qwen VL vision processing
 │   ├── logging.py                         #   wandb + console logging setup
 │   └── utils.py                           #   Shared helpers
-└── trl_fork/trl/                             # Forked TRL with custom Qwen trainers
+└── trl_fork/                                   # Forked TRL with custom Qwen trainers
 ```
 
 ## Custom Reward Functions
