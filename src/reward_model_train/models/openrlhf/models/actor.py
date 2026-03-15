@@ -54,7 +54,7 @@ class Actor(nn.Module):
         **kwargs,
     ) -> None:
         super().__init__()
-        
+
         if isinstance(pretrain_or_model, str):
             attn_implementation = "flash_attention_2" if use_flash_attention_2 else "eager"
             print(f"!!!! actor using ", attn_implementation)
@@ -253,7 +253,7 @@ class Actor(nn.Module):
 
                 # attention_mask = packed_attention_mask
                 # position_ids = packed_position_ids
-                
+
                 position_ids = reset_position_ids(attention_mask)
                 # position_ids = packed_sequence_to_position_tensor(packed_seq_lens, sequences.device)
                 # print(position_ids, len(position_ids[0]))
@@ -264,14 +264,11 @@ class Actor(nn.Module):
         #     print(f'===========\ntraining imagepad in sequences {ntoken_each} sum to {sum(ntoken_each)}\n========')
         #     print('!!!!!!!! 2377')
         #     print(visual_inputs['pixel_values'].shape)
-        # import pdb; pdb.set_trace()
         # try:
         output = self.model(sequences, attention_mask=attention_mask, position_ids=position_ids, **visual_inputs)
         # except:
         #     print(f"seq imgpad", [(xx==151655).sum().item() for xx in sequences])
         #     print(f"imagegrd {visual_inputs['image_grid_thw']}, pixel shape", visual_inputs['pixel_values'].shape)
-        #     breakpoint()
-        # import pdb; pdb.set_trace()
         # https://github.com/OpenRLHF/OpenRLHF/pull/634
         output["logits"] = output["logits"].to(torch.float32)
 
@@ -301,7 +298,7 @@ class Actor(nn.Module):
             if with_entropy:
                 action_logits = output["logits"][:, -num_actions-1:-1, :]
                 action_entropy = entropy_from_logits(action_logits)
-                # pass 
+                # pass
             output['action_entropy'] = action_entropy
             return (action_log_probs, output)
         else:
@@ -315,8 +312,8 @@ class Actor(nn.Module):
 
     def print_trainable_parameters(self):
         self.model.print_trainable_parameters()
-        
-if __name__ == '__main__': 
+
+if __name__ == '__main__':
     mp = "/home/ma-user/work/data_mllm/pretrain_models/Qwen2.5-VL/Qwen2.5-VL-3B-Instruct"
     actor = Actor(mp, True, device_map='cuda', packing_samples=True)
     from transformers import AutoTokenizer
@@ -340,8 +337,7 @@ if __name__ == '__main__':
     #     # Append the tensor to the list
     #     tensors.append(token_tensor)
     #     masks.append(torch.ones_like(token_tensor)*(idx+1))
-    
-    # # import pdb; pdb.set_trace()
+
     # tmp = actor.forward(torch.cat(tensors+[torch.tensor([0,0]).to('cuda')])[None], attention_mask=torch.cat(masks)[None], packed_seq_lens=[len(x) for x in tensors]+[1,1], return_output=True)
     # print(tmp)
     # tmp2 = actor.forward(torch.cat(tensors[:1])[None], attention_mask=torch.cat(masks[:1])[None], packed_seq_lens=[len(x) for x in tensors[:1]], return_output=True)

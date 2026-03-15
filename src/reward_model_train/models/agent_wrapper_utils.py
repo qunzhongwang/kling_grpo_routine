@@ -1,7 +1,7 @@
 import os
 import time
 import json
-import re 
+import re
 import pickle as pkl
 from abc import ABC
 from copy import deepcopy, copy
@@ -23,9 +23,9 @@ from datasets import interleave_datasets, load_dataset
 
 from openrlhf.models.actor import Actor
 from openrlhf.models.utils import (
-    compute_approx_kl, 
-    compute_reward, 
-    masked_mean, 
+    compute_approx_kl,
+    compute_reward,
+    masked_mean,
     unpacking_samples
 )
 
@@ -35,8 +35,8 @@ from openrlhf.utils.logging_utils import init_logger
 
 from qwen_vl_utils import (
     smart_resize,
-    process_vision_info, 
-    extract_vision_info, 
+    process_vision_info,
+    extract_vision_info,
     fetch_image
 )
 
@@ -46,7 +46,7 @@ from collections import defaultdict
 # pip install math-verify
 
 from math_verify import (
-    parse, 
+    parse,
     verify
 )
 
@@ -120,7 +120,7 @@ Zoom in on the image based on the bounding box coordinates. It is useful when th
         },
         "required": ["bbox_2d", "target_image"]
     }
-    
+
     def call(self, image, bbox_2d,  padding=0.1):
         """
         Crop the image based on the bounding box coordinates.
@@ -141,23 +141,23 @@ Zoom in on the image based on the bounding box coordinates. It is useful when th
 
 
 
-        return cropped_image 
-    
+        return cropped_image
+
 
 def extract_qwen_query_and_response(input_text):
     # Split the input text by the assistant's start token
     parts = input_text.split("<|im_start|>assistant\n")
-    
+
     # The first part contains the system and user messages
     user_part = parts[0]
-    
+
     # The second part contains the assistant's response
     if len(parts)==1: assistant_response = ""
     else: assistant_response = "".join(parts[1:])
-    
+
     # Extract the user query by splitting the user part
     user_query = user_part.split("<|im_start|>user\n")[1].split('<|im_end|>')[0].split('<|vision_end|>')[-1]
-    
+
     # Return the user query and the assistant's response
     return user_query, assistant_response
 
@@ -165,17 +165,17 @@ def extract_qwen_query_and_response(input_text):
 def extract_dsmath_query_and_response(input_text):
     # Split the input text by the assistant's start token
     parts = input_text.split("Assistant:")
-    
+
     # The first part contains the system and user messages
     user_part = parts[0]
-    
+
     # The second part contains the assistant's response
     if len(parts)==1: assistant_response = ""
     else: assistant_response = parts[1]
-    
+
     # Extract the user query by splitting the user part
     user_query = user_part.split("User:")[1].strip()
-    
+
     # Return the user query and the assistant's response
     return user_query, assistant_response
 
@@ -184,36 +184,36 @@ def extract_dpsk_query_and_response(input_text):
     # Split the input text by the assistant's start token
     # print(input_text)
     parts = input_text.split("<|Assistant|>")
-    
+
     # The first part contains the system and user messages
     if len(parts)==0:
         print('!!!! warning extraction', input_text)
     user_part = parts[0]
-    
+
     # The second part contains the assistant's response
     if len(parts)==1: assistant_response = ""
     else: assistant_response = parts[1]
-    
+
     # Extract the user query by splitting the user part
     user_query = user_part.split("<|User|>")[1]
-    
+
     # Return the user query and the assistant's response
     return user_query, assistant_response
 
 def extract_llama_query_and_response(input_text):
     # Split the input text by the assistant's start token
     parts = input_text.split("assistant<|end_header_id|>\n\n")
-    
+
     # The first part contains the system and user messages
     user_part = parts[0]
-    
+
     # The second part contains the assistant's response
     if len(parts)==1: assistant_response = ""
     else: assistant_response = parts[1]
-    
+
     # Extract the user query by splitting the user part
     user_query = user_part.split("user<|end_header_id|>\n\n")[1].split('<|eot_id|><|start_header_id|>')[0]
-    
+
     # Return the user query and the assistant's response
     return user_query, assistant_response
 
@@ -221,20 +221,20 @@ def extract_autocode_query_and_response(input_text):
     # print('!!!! example input', input_text)
     # Split the input text by the assistant's start token
     parts = input_text.split("Response:")
-    
+
     # The first part contains the system and user messages
     user_part = parts[0]
-    
+
     # The second part contains the assistant's response
     if len(parts)==1: assistant_response = ""
     else: assistant_response = parts[1]
-    
+
     # Extract the user query by splitting the user part
     user_query = user_part.split("### Instruction:\n")[1].split('\n\n### ')[0]
-    
+
     # Return the user query and the assistant's response
     return user_query, assistant_response
-    
+
 def to(tensor: Union[torch.Tensor, list[torch.Tensor]], device):
     if isinstance(tensor, list):
         return [to(t, device) for t in tensor]

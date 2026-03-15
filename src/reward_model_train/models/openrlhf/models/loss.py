@@ -78,16 +78,16 @@ class PolicyLoss(nn.Module):
         return_dict=False,
         action_entropy=None
     ) -> torch.Tensor:
-        
-        # if validity is None: 
-        #     val_mask = action_mask 
+
+        # if validity is None:
+        #     val_mask = action_mask
         # else:
         #     val_mask = validity if action_mask is None else action_mask*validity
         # we will use invalid samples: no-eos/no-boxed
         val_mask = action_mask
         ret = dict()
-        
-        
+
+
         logp_ratio = (log_probs - old_log_probs) * val_mask
         ratio = logp_ratio.exp()
         surr1 = ratio * advantages
@@ -97,36 +97,36 @@ class PolicyLoss(nn.Module):
         clipped_ratio = ratio.clamp(1 - e_low, 1 + e_high)
         surr2 = clipped_ratio * advantages
         loss = torch.max(-surr1, -surr2)
-        final_sftloss = 0.0 
+        final_sftloss = 0.0
         #############
         if self.rloo_sft:
-            sftloss = 0. 
-            ntokens = 0. 
+            sftloss = 0.
+            ntokens = 0.
             for idx,wait in enumerate(raw_rewards):
-                if wait>0.99: 
+                if wait>0.99:
                     adv = advantages[idx][-1]
                     if adv>0.:
                         # loss[idx] = -surr1[idx]
                         # if wait>1.5:
                         #     advantages[idx] = -0.25
-                        sftloss += torch.sum(-log_probs[idx]*val_mask[idx]) # for convenience directly use logpratio, because old-logp has no grad 
-                        ntokens += torch.sum(val_mask[idx]) 
+                        sftloss += torch.sum(-log_probs[idx]*val_mask[idx]) # for convenience directly use logpratio, because old-logp has no grad
+                        ntokens += torch.sum(val_mask[idx])
                         print(f'!!!! [debug] SFT with wait={wait} in {raw_rewards}')
-            final_sftloss = sftloss/ntokens if ntokens>0. else 0.0 
+            final_sftloss = sftloss/ntokens if ntokens>0. else 0.0
             ret['sft_loss'] = final_sftloss
         ####################
         # The k3 estimator is the non negative kl approximation in
         # http://joschu.net/blog/kl-approx.html
         # Besides non negative, it is also unbiased and have lower variance.
-        # kl_penalty = 0.0 
+        # kl_penalty = 0.0
         # logp = log_probs.clamp(-5., 0) # .clamp(-0.6)
         # a = old_log_probs - logp # very large - very small?
-        # # logx <= x-1, so x-1-logx >= 0 
+        # # logx <= x-1, so x-1-logx >= 0
         # penalty = a.exp() - 1 - a
-        # kl_penalty = penalty.clamp(0., 1.0) 
+        # kl_penalty = penalty.clamp(0., 1.0)
         ####################
-        
-        
+
+
         final = masked_mean(loss, val_mask, dim=None)
         if final.item()>10:
             valid_surr1 = surr1[action_mask]
@@ -135,37 +135,37 @@ class PolicyLoss(nn.Module):
             min_surr1_index = torch.argmin(valid_surr1)
             corresponding_ratio_element = valid_ratio[min_surr1_index]
             corresponding_advantages_element = valid_adv[min_surr1_index]
-            
+
             print(f"!!!! warning pgloss", final, surr1.min(), corresponding_advantages_element, corresponding_ratio_element)
-            
+
             final = final.clamp(-1.0,1.0)
-        
+
         # if self.rloo_sft:
-        #     # now raw_rewards act like some markers 
-        #     bool_mask = (torch.FloatTensor(raw_rewards)>0.99).to(float) # at least one wait 
+        #     # now raw_rewards act like some markers
+        #     bool_mask = (torch.FloatTensor(raw_rewards)>0.99).to(float) # at least one wait
         #     bsz = len(bool_mask)
         #     num_actions = val_mask.size(1)
         #     raw_rewards = bool_mask.unsqueeze(1).expand(bsz, num_actions).to(val_mask.device)
         #     tmp = raw_rewards * val_mask
         #     normalizer = tmp / (tmp.sum()+1e-8)
-        #     pos_token_logps = (normalizer * log_probs * raw_rewards).sum() 
+        #     pos_token_logps = (normalizer * log_probs * raw_rewards).sum()
         #     ret['sft_loss'] = -pos_token_logps
-        
-        # pos_sel = (advantages>0).float() * val_mask # (advantages>0).float() * tmp 
-        # neg_sel = (advantages<0).float() * val_mask # (advantages<0).float() * tmp 
+
+        # pos_sel = (advantages>0).float() * val_mask # (advantages>0).float() * tmp
+        # neg_sel = (advantages<0).float() * val_mask # (advantages<0).float() * tmp
         # ret['weighted_pos_logp'] = masked_mean(log_probs, pos_sel, dim=None)
         # ret['weighted_neg_logp'] = masked_mean(-log_probs, neg_sel, dim=None)
         # ret['kl_penalty'] = masked_mean(kl_penalty, val_mask, dim=None)
-        # if action_entropy is not None: 
-        #     allneg = (raw_rewards<0.5).float() * (advantages==0).float() * val_mask 
+        # if action_entropy is not None:
+        #     allneg = (raw_rewards<0.5).float() * (advantages==0).float() * val_mask
         #     allneg_entropy = masked_mean(action_entropy, allneg, dim=None)
         #     ret['allneg_entropy'] = allneg_entropy
         # print(f"!!!! [training] pos logp = {get_print(log_probs,pos_sel)}, neg logp = {get_print(log_probs,neg_sel)}, kl={ret['kl_penalty']}, allneg_entropy={ret['allneg_entropy'] if action_entropy is not None else None}")
-        ret['actor_loss'] = final 
-        
-        if return_dict: return ret 
+        ret['actor_loss'] = final
+
+        if return_dict: return ret
         else: return ret['actor_loss']
-        
+
 class SFTLoss(nn.Module):
     """
     Policy Loss for PPO
@@ -189,25 +189,25 @@ class SFTLoss(nn.Module):
         return_dict=False,
         action_entropy=None
     ) -> torch.Tensor:
-        
-        # if validity is None: 
-        #     val_mask = action_mask 
+
+        # if validity is None:
+        #     val_mask = action_mask
         # else:
         #     val_mask = validity if action_mask is None else action_mask*validity
         # we will use invalid samples: no-eos/no-boxed
         val_mask = action_mask
-            
+
         ret = dict()
-     
+
         tmp = (raw_rewards>0.5).float() * val_mask
         normalizer = tmp / (tmp.sum()+1e-8)
         # print('!!!! debug', normalizer.shape, log_probs.shape, raw_rewards.shape)
-        pos_token_logps = (normalizer * log_probs * raw_rewards).sum() 
+        pos_token_logps = (normalizer * log_probs * raw_rewards).sum()
         ret['sft_loss'] = -pos_token_logps
         # ret['kl_penalty'] = masked_mean(kl_penalty, val_mask, dim=None)
-        
-        
-        if return_dict: return ret 
+
+
+        if return_dict: return ret
         else: return ret['sft_loss']
 
 
@@ -265,7 +265,7 @@ class LogExpLoss(nn.Module):
     ) -> torch.Tensor:
         loss = torch.log(1 + torch.exp(reject_reward - chosen_reward)).mean()
         return loss
-    
+
 class ScaleBTLoss(nn.Module):
     """
     Pairwise Loss for Reward Model

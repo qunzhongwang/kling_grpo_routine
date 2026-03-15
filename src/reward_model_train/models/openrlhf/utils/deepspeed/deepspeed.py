@@ -311,7 +311,7 @@ class DeepspeedStrategy(ABC):
         output_state_dict = {}
         dist.barrier()
         for k, v in model_to_save.named_parameters():
-            
+
             # only gather z3 params
             params_to_fetch = _z3_params_to_fetch([v])
             with deepspeed.zero.GatheredParameters(params_to_fetch, enabled=len(params_to_fetch) > 0):
@@ -319,7 +319,7 @@ class DeepspeedStrategy(ABC):
                 if self.is_rank_0():
                     output_state_dict[k] = vv
                     print(f"!!!! [saving] named_parameters after gather, {k}:{v.shape}")
-        
+
         if self.is_rank_0():
             # print('!!!! after named_parameters', sorted(list(output_state_dict.keys())))
             state_dict = model_to_save.state_dict()
@@ -332,7 +332,7 @@ class DeepspeedStrategy(ABC):
                 vv = v.data.cpu()
                 output_state_dict[k] = vv
             # print('!!!! after named_buffers', sorted(list(output_state_dict.keys())))
-            
+
             for k in output_state_dict:
                 v = output_state_dict[k]
                 # print(f'!!!! [saving] {k}:{v.shape}')

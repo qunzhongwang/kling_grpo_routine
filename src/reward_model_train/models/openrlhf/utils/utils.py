@@ -10,13 +10,13 @@ def get_vl_processor(pretrain, model, padding_side="left", strategy=None, use_fa
     min_pixels = int(os.getenv("MIN_PIXELS", 256*28*28))
     max_pixels = int(os.getenv("MAX_PIXELS", 5120*28*28))
     print(f"!!!! getvlprocessor min max pixels min={min_pixels},max={max_pixels}, rightpadding")
-    processor = AutoProcessor.from_pretrained(pretrain, 
-                                              trust_remote_code=True, 
-                                              use_fast=use_fast, 
-                                            #   min_pixels=min_pixels, 
+    processor = AutoProcessor.from_pretrained(pretrain,
+                                              trust_remote_code=True,
+                                              use_fast=use_fast,
+                                            #   min_pixels=min_pixels,
                                             #   max_pixels=max_pixels,
                                               )
-    
+
     # print(f"!!!! [debug] processor: {processor}")
     tokenizer = processor.tokenizer
     tokenizer.padding_side = "right" # padding_side
@@ -77,7 +77,7 @@ def blending_datasets(
     for i, dataset in enumerate(datasets):
         dataset = dataset.strip()
         strategy.print(f"dataset: {dataset}")
-        dp = dataset 
+        dp = dataset
         data_dir = dataset.split("@")[1].strip() if "@" in dataset else None
         dataset = dataset.split("@")[0].strip()
         dataset_basename = os.path.basename(dataset)
@@ -99,7 +99,7 @@ def blending_datasets(
         elif dp.endswith('parquet'):
             strategy.print(f"loaded parquet: {dp} from files")
             data = load_dataset("parquet", data_files=dp)
-        
+
         # local dataset saved with `datasets.Dataset.save_to_disk`
         # elif os.path.isdir(dataset):
         #     data = load_from_disk(dataset)

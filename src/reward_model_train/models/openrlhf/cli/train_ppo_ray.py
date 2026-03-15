@@ -363,7 +363,7 @@ if __name__ == "__main__":
     parser.add_argument("--prompt_split", type=str, default="train")
     parser.add_argument("--pretrain_data", type=str, default=None, help="HF dataset name or path")
     parser.add_argument("--eval_data", type=str, default=None, help="HF dataset name or path")
-    
+
     parser.add_argument("--training_mode", type=str, default="train", help="HF dataset name or path")
     parser.add_argument(
         "--pretrain_data_probs",
@@ -398,8 +398,8 @@ if __name__ == "__main__":
 
     # ModelScope parameters
     parser.add_argument("--use_ms", action="store_true", default=False)
-    
-    # additional 
+
+    # additional
     parser.add_argument("--gt_path", type=str, default=None)
     parser.add_argument("--modelfamily", type=str, default='qwen')
     parser.add_argument("--system_prompt", type=str, default='None')
@@ -407,7 +407,7 @@ if __name__ == "__main__":
     parser.add_argument("--format", type=str, default='')
     parser.add_argument("--val_temperature", type=float, default=0.6)
     parser.add_argument("--curriculum_filter", type=str, default=None)
-    
+
     parser.add_argument("--filter", type=str, default=None)
     parser.add_argument("--maxturn", type=int, default=2)
     parser.add_argument("--refill_factor", type=int, default=2)
@@ -416,7 +416,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_out_tokens", type=int, default=2048)
     parser.add_argument("--curriculum_ncollection", type=int, default=2)
     parser.add_argument("--multires", type=str, default="False")
-    
+
     parser.add_argument("--tokpath", type=str, default="none")
     parser.add_argument("--rule_reward", type=str, default="default")
     parser.add_argument("--prefix_generation", type=str, default="default")
@@ -457,7 +457,7 @@ if __name__ == "__main__":
             "You likely want to pass $'\\n' in Bash or \"`n\" in PowerShell."
         )
 
-    if args.train_vlm: 
+    if args.train_vlm:
         if args.packing_samples:
             print("[Warning] --train_vlm is not supported with --packing_samples. We will set args.packing_samples to False")
             args.packing_samples = False

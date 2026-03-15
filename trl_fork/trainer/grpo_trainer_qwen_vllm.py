@@ -41,7 +41,7 @@ from transformers import (
     Trainer,
     TrainerCallback,
     is_wandb_available,
-    
+
 )
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
 from transformers.trainer_utils import seed_worker
@@ -864,7 +864,7 @@ class GRPOTrainer_qwen(Trainer):
                             ],
                             dim=1
                 )))
-            
+
             visual_inputs_batch["pixel_values_videos"] = visual_inputs["pixel_values_videos"][pixel_values_videos_offset : pixel_values_videos_offset + local_offset]
             visual_inputs_batch["video_grid_thw"] = visual_inputs["video_grid_thw"][i * video_per_sentence : ( i + batch_size ) * video_per_sentence]
             visual_inputs_batch["second_per_grid_ts"] = visual_inputs["second_per_grid_ts"][i * video_per_sentence : ( i + batch_size ) * video_per_sentence]
@@ -872,7 +872,7 @@ class GRPOTrainer_qwen(Trainer):
 
             # We add 1 to `logits_to_keep` because the last logits of the sequence is later excluded
             logits = model(
-                input_ids=input_ids_batch, 
+                input_ids=input_ids_batch,
                 attention_mask=attention_mask_batch,
                 **visual_inputs_batch,
             ).logits[ : , -logits_to_keep - 1 : -1 , : ] # logits = logits[:, :-1, :]  # (B, L-1, V), exclude the last logit: it corresponds to the next token pred
@@ -1018,7 +1018,7 @@ class GRPOTrainer_qwen(Trainer):
         else:
             # In evaluation, there is neither batch grouping for generation, nor multiple iterations, hence
             # local generation batch == local eval batch
-            inputs = self._generate_and_score_completions(generation_batch) #TODO EVAL PIPELINE
+            inputs = self._generate_and_score_completions(generation_batch)
         return inputs
 
     def _generate_and_score_completions(
@@ -1031,14 +1031,14 @@ class GRPOTrainer_qwen(Trainer):
         prompts_text = [x["prompts_text"] for x in inputs]
 
         image_inputs, video_inputs, video_kwargs = process_vision_info(
-            prompts, 
+            prompts,
             return_video_kwargs=True
         )
 
         prompt_inputs = self.processing_class(
             text=prompts_text,
             images=image_inputs,
-            videos=video_inputs, 
+            videos=video_inputs,
             padding=True,
             return_tensors="pt",
             padding_side="left",
@@ -1046,7 +1046,7 @@ class GRPOTrainer_qwen(Trainer):
             )
 
         prompt_inputs = super()._prepare_inputs(prompt_inputs)
-        
+
         (
             prompt_ids,
             prompt_mask,
@@ -1060,7 +1060,7 @@ class GRPOTrainer_qwen(Trainer):
             "video_grid_thw" : prompt_inputs["video_grid_thw"],
             "second_per_grid_ts" :  prompt_inputs["second_per_grid_ts"],
         }
-        
+
         if self.max_prompt_length is not None:
             prompt_ids = prompt_ids[:, -self.max_prompt_length :]
             prompt_mask = prompt_mask[:, -self.max_prompt_length :]
@@ -1157,10 +1157,10 @@ class GRPOTrainer_qwen(Trainer):
                     else nullcontext()
                 ):
                     prompt_completion_ids = unwrapped_model.generate(
-                        prompt_ids, 
-                        attention_mask=prompt_mask, 
+                        prompt_ids,
+                        attention_mask=prompt_mask,
                         **visual_inputs,
-                        generation_config=self.generation_config, 
+                        generation_config=self.generation_config,
                     )
 
             # Compute prompt length and extract completion ids
@@ -1194,7 +1194,7 @@ class GRPOTrainer_qwen(Trainer):
 
         logits_to_keep = completion_ids.size(1)  # we only need to compute the logits for the completion tokens
         batch_size = self.args.per_device_train_batch_size if mode == "train" else self.args.per_device_eval_batch_size
-        
+
         with torch.no_grad():
             # When using num_iterations == 1 and steps_per_generation <= gradient_accumulation_steps
             # old_per_token_logps == per_token_logps, so we can skip it's computation here, and use
@@ -1264,7 +1264,7 @@ class GRPOTrainer_qwen(Trainer):
 
         # Apply weights to each reward function's output and sum
         rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0)).nansum(dim=1)
-        
+
         # Compute grouped-wise rewards
         mean_grouped_rewards = rewards.view(-1, self.num_generations).mean(dim=1)
         std_grouped_rewards = rewards.view(-1, self.num_generations).std(dim=1)
@@ -1326,12 +1326,12 @@ class GRPOTrainer_qwen(Trainer):
 
         visual_inputs = self.evenly_split_visual_inputs(visual_inputs, len(prompt_ids))
         (
-            pixel_values_videos, 
-            video_grid_thw, 
+            pixel_values_videos,
+            video_grid_thw,
             second_per_grid_ts
         ) = (
-                visual_inputs["pixel_values_videos"], 
-                visual_inputs["video_grid_thw"], 
+                visual_inputs["pixel_values_videos"],
+                visual_inputs["video_grid_thw"],
                 visual_inputs["second_per_grid_ts"]
             )
         return {
@@ -1350,14 +1350,14 @@ class GRPOTrainer_qwen(Trainer):
 
         visual_inputs["pixel_values_videos"] = \
         visual_inputs["pixel_values_videos"].reshape(
-            batch_size, 
+            batch_size,
             len(visual_inputs["pixel_values_videos"]) // batch_size,
             -1
         )
 
         visual_inputs["video_grid_thw"] = \
         visual_inputs["video_grid_thw"].reshape(
-            batch_size, 
+            batch_size,
             len(visual_inputs["video_grid_thw"]) // batch_size,
             -1
         )
@@ -1367,11 +1367,11 @@ class GRPOTrainer_qwen(Trainer):
 
         visual_inputs["second_per_grid_ts"] = \
         visual_inputs["second_per_grid_ts"].reshape(
-            batch_size, 
+            batch_size,
             len(visual_inputs["second_per_grid_ts"]) // batch_size,
             -1
         )
-        
+
         return visual_inputs
 
     def compute_liger_loss(self, unwrapped_model, inputs):

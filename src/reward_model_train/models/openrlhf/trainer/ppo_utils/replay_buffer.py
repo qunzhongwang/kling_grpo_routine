@@ -72,7 +72,7 @@ def split_experience_batch(experience: Experience, data_processor: Optional[Base
         visual_inputs_batch = experience.visual_inputs
         visual_inputs_batch['input_ids'] = experience.sequences
         visual_inputs_chunks = data_processor.split_input_batch(visual_inputs_batch)
-        # used some techniques to identify troublesome examples 
+        # used some techniques to identify troublesome examples
         last_valid_placeholder = None
         for idx, entry in enumerate(visual_inputs_chunks):
             if entry is None:
@@ -80,13 +80,13 @@ def split_experience_batch(experience: Experience, data_processor: Optional[Base
             elif entry['input_ids'] is None:
                 flags[idx] = True
             else:
-                last_valid_placeholder = entry 
+                last_valid_placeholder = entry
         for idx, flag in enumerate(flags):
             if flag:
                 visual_inputs_chunks[idx] = last_valid_placeholder
         # Note: if all entries are invalid, there will be bug
         for i, visual_inputs in enumerate(visual_inputs_chunks):
-            if visual_inputs is None or 'input_ids' not in visual_inputs: continue 
+            if visual_inputs is None or 'input_ids' not in visual_inputs: continue
             visual_inputs.pop('input_ids')
             batch_kwargs[i]["visual_inputs"] = visual_inputs
     else:
@@ -95,10 +95,10 @@ def split_experience_batch(experience: Experience, data_processor: Optional[Base
 
     for i in range(batch_size):
         batch_kwargs[i]["info"] = {}
-    
+
     for k, v in experience.info.items():
         if v is None: continue
-        elif isinstance(v, list): vals = v 
+        elif isinstance(v, list): vals = v
         else:
             # print('!!!! debug', k, type(v))
             vals = torch.unbind(v)
@@ -114,16 +114,16 @@ def split_experience_batch(experience: Experience, data_processor: Optional[Base
     invalid_placeholders = []
     while len(invalid_placeholders) < num_invalid:
         for i, entry in enumerate(batch_kwargs):
-            if not flags[i]: # a valid item 
+            if not flags[i]: # a valid item
                 invalid_placeholders.append(entry)
     invalid_index = 0
     for i, entry in enumerate(batch_kwargs):
-        if flags[i]: 
+        if flags[i]:
             batch_kwargs[i] = invalid_placeholders[invalid_index]
             invalid_index += 1
-    
+
     items = [BufferItem(**kwargs) for kwargs in batch_kwargs]
-    
+
     return items
 
 
@@ -157,7 +157,7 @@ def make_experience_batch(items: List[BufferItem], data_processor: Optional[Base
     to_convert = {'reward','validity','return'}
     to_skip = {'question'}
     print(f"===> [verbose] make_experience_batch() making exp.info, converting {to_convert}, skipping {to_skip}")
-    
+
     for key in items[0].info.keys():
         if key in to_skip: continue
         tmplist = [item.info[key] for item in items]
@@ -165,8 +165,8 @@ def make_experience_batch(items: List[BufferItem], data_processor: Optional[Base
         # if key in {'difficulty','response_length','total_length','kl','solve_all',"solve_none",'easy','hard','medium','num_switch','use_codes','usefmt','norepeat'}:
         if key in to_convert:
             vals = torch.tensor(tmplist)
-        else: vals = tmplist 
-        
+        else: vals = tmplist
+
         kwargs["info"][key] = vals
     if data_processor is not None:
         kwargs["visual_inputs"] = data_processor.make_input_batch([item.visual_inputs for item in items])
@@ -190,7 +190,7 @@ def remove_padding_in_sequences(items):
         right_pad = None if right_pad == 0 else -right_pad
 
         # left_pad for seq and att_mask
-        left_pad = att_mask.long().argmax() # the first position that is 1 
+        left_pad = att_mask.long().argmax() # the first position that is 1
         (
             item.sequences,
             item.action_log_probs,
@@ -209,12 +209,11 @@ def remove_padding_in_sequences(items):
             act_mask[:right_pad],
         )
         # if item.sequences[-1]==151655:
-        #     breakpoint()
     return items
 
 def shuffle_questions(data):
     """
-    Given a list of question strings, 
+    Given a list of question strings,
     first obtain question to index list,
     then shuffle the questions,
     and return the index list based on the shuffled questions
@@ -239,7 +238,7 @@ def shuffle_questions(data):
     shuffled_indices = []
     for question in shuffled_questions:
         shuffled_indices.extend(q2idx[question])
-    
+
     return shuffled_indices
 
 def separate_and_shuffle_questions(questions, diffs, seed=None):
@@ -275,8 +274,8 @@ def separate_and_shuffle_questions(questions, diffs, seed=None):
             zero_questions.append(question)
         else:
             non_zero_questions.append(question)
-            
-        
+
+
 
     # Sort non-zero questions based on diffs in descending order
     # non_zero_items.sort(key=lambda item: item[1], reverse=True)
@@ -299,15 +298,15 @@ class NaiveReplayBuffer(ABC):
     """
 
     def __init__(
-        self, 
-        sample_batch_size: int, 
-        data_processor: Optional[BaseDataProcessor] = None, 
-        limit: int = 0, 
-        cpu_offload: bool = True, 
+        self,
+        sample_batch_size: int,
+        data_processor: Optional[BaseDataProcessor] = None,
+        limit: int = 0,
+        cpu_offload: bool = True,
         packing_samples: bool = False,
         drop_maxlen: bool = False,
         maxlen: int = 10**8,
-        train_batch_size: int = 64, 
+        train_batch_size: int = 64,
         use_pos: bool = False
     ) -> None:
         super().__init__()
@@ -319,15 +318,15 @@ class NaiveReplayBuffer(ABC):
         self.packing_samples = packing_samples
         self.target_device = torch.device(f"cuda:{torch.cuda.current_device()}")
         self.items: List[BufferItem] = []
-        self.keep_items = None 
+        self.keep_items = None
         self.maxlen = maxlen
         self.drop_maxlen = drop_maxlen
         self.eval_items: List[BufferItem] = []
         self.shuffled_indexes = None
         self.sample_num = 0
-        self.train_batch_size = train_batch_size 
+        self.train_batch_size = train_batch_size
         self.use_pos = use_pos
-        
+
 
     @torch.no_grad()
     def append_split(self, experience: Experience, is_sft=False, is_eval=False) -> None:
@@ -372,7 +371,7 @@ class NaiveReplayBuffer(ABC):
         #     ptr = self.sample_num % num_total
         #     idxes = self.shuffled_indexes[self.sample_batch_size*ptr:self.sample_batch_size*(ptr+1)]
         #     items = [self.items[idx] for idx in idxes]
-        # else: 
+        # else:
         items = random.sample(self.items, self.sample_batch_size)
         experience = make_experience_batch(items, self.data_processor, self.packing_samples)
         if self.cpu_offload:
@@ -386,7 +385,7 @@ class NaiveReplayBuffer(ABC):
         # if self.shuffled_indexes:
         #     idx = self.shuffled_indexes[idx]
         # print('!!!! getitem', idx, self.items[idx].info['question'])
-        
+
         return self.items[idx]
 
     def collate_fn(self, batch) -> Experience:
@@ -397,13 +396,13 @@ class NaiveReplayBuffer(ABC):
         questions = [item.info['question'] for item in self.items]
         shuffled_indexes = shuffle_questions(questions)
         self.shuffled_indexes = shuffled_indexes
-    
+
     def active_sampling(self, do_filter=False, do_ssr=False):
         print(f'!!!! [debug] shuffling for filter mode, num items = {len(self.items)}')
         numkeep = len(self.items)
         if self.keep_items is None:
             self.keep_items = deque(maxlen=numkeep)
-        
+
         questions = np.arange(len(self.items))
         diffs = [item.advantages[-1].item() for item in self.items]
         rewards = [item.info['reward'] for item in self.items] # already float
@@ -415,8 +414,8 @@ class NaiveReplayBuffer(ABC):
         stats = {}
         print([ii.info['uniformity'] for ii in self.items])
         for question, item in enumerate(self.items):
-            is_uniform = item.info['uniformity']>0.5 
-            if is_uniform: 
+            is_uniform = item.info['uniformity']>0.5
+            if is_uniform:
                 zero_questions.append(question)
             else:
                 non_zero_questions.append(question)
@@ -429,12 +428,12 @@ class NaiveReplayBuffer(ABC):
         #         non_zero_questions.append(question)
         self.keep_items.extend([self.items[ii] for ii in non_zero_questions])
         zero_percentage = len(zero_questions)/len(questions)
-        ret_info = {"mean_reward": mean_rewards, 
+        ret_info = {"mean_reward": mean_rewards,
                     "initial_saturation": zero_percentage}
         for k in ['ALLTrue','ALLFalse','Easy', 'Medium','Hard']:
             ret_info[f'initial_{k}'] = 0.
             stats[f'initial_{k}'] = np.mean([item.info[f'round0_{k}'] for item in self.items])
-         
+
         ret_info.update(stats)
         seed = 42
         random.seed(seed)
@@ -442,42 +441,42 @@ class NaiveReplayBuffer(ABC):
         idxlist = non_zero_questions+zero_questions
         numtotal = len(idxlist)//2
         if not do_filter : return ret_info
-        # if do_ssr and len(self.keep_items)<numtotal: 
+        # if do_ssr and len(self.keep_items)<numtotal:
         #     print(f'!!!! [debug] {len(self.keep_items)} not enough for SSR')
         #     return ret_info
-        
+
         print(f'!!!! [debug] {len(zero_questions)}/{len(idxlist)} qas have zero advantages, useless')
         ratio = len(zero_questions)/len(idxlist)
-        if not do_ssr: 
+        if not do_ssr:
             if len(non_zero_questions)>0:
                 num_repeat = len(self.items)//len(non_zero_questions)
                 new_items = []
                 for _ in range(num_repeat):
                     random.shuffle(non_zero_questions)
                     new_items.extend(non_zero_questions)
-                
+
                 num_remain = len(self.items) % len(non_zero_questions)
                 if num_remain>0:
                     random.shuffle(non_zero_questions)
-                    new_items.extend(non_zero_questions[:num_remain])   
+                    new_items.extend(non_zero_questions[:num_remain])
                 self.items = [self.items[idx] for idx in new_items]
             return ret_info
-            
+
         else:
             #######################
             # numtotal = len(idxlist)//2
             # ratio = 0.1 # 0.1  if self.use_pos else 0.0
             # num_pos = int(ratio*len(non_zero_questions))
-            # if len(non_zero_questions)==0: # there are no non-zero questions 
+            # if len(non_zero_questions)==0: # there are no non-zero questions
             #     num_pos = min(numtotal, len(pos_items))
             #     print(f'!!!! [debug] warning:  because non-zero questions {len(non_zero_questions)} qas is scarce, we include more positive items')
             # elif len(non_zero_questions) < numtotal//2:
             #     print(f'!!!! [debug] warning:  because non-zero questions {len(non_zero_questions)} qas is scarce, we include more positive items')
             #     num_pos = min(num_pos, numtotal//2-len(non_zero_questions))
-            
+
             # sel = non_zero_questions + pos_items[:num_pos]
             # if len(non_zero_questions)==0:
-            #     sel = idxlist 
+            #     sel = idxlist
             #     print(f"!!!! [warning] queries all-zero")
             # sel_alist = np.array([abs(self.items[idx].advantages[0].item())+1e-4 for idx in sel])
             # sel_p = sel_alist/np.sum(sel_alist)
@@ -493,11 +492,11 @@ class NaiveReplayBuffer(ABC):
             # print(f"!!!! [debug] SSR={do_ssr}, replay buffer repeat for {numiter} times to fill up nonzero questions")
             # self.items = [self.items[idx] for idx in newlist]
             ################
-            
+
             print(f'!!!! [debug] warning: in filter mode, the remaining non-zero is too scarce, {len(non_zero_questions)} qas will repeat to {numtotal}')
             ratio = 0.0
             current_effective = []
-            
+
             ########### we don't use sampling from current effective now
             num_pos = int(ratio*len(non_zero_questions))
             # sel = non_zero_questions + pos_items[:num_pos]
@@ -532,7 +531,7 @@ class NaiveReplayBuffer(ABC):
             augmented = [self.keep_items[idx] for idx in newlist]
             self.items = current_effective + augmented
             return ret_info
-        
+
     def normalize(self, attribute: str, strategy) -> None:
         assert attribute == "advantages"
         items = []
@@ -566,6 +565,6 @@ class NaiveReplayBuffer(ABC):
             before = items[i]
             print('!!!! normalize: na', len(getattr(item, 'action_log_probs')), item.info, f'rloo adv={before[-1]}->{after[-1]}')
             match = getattr(item, 'match', 0.0)
-            if match>0.5 and after[-1]<0: continue 
+            if match>0.5 and after[-1]<0: continue
             setattr(item, attribute, after)
             # setattr(item, attribute, (items[i] - mean) * rstd + 1e-8)

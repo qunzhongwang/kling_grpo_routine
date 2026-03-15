@@ -113,7 +113,7 @@ def train(args):
     #     pg=pg,
     #     num_gpus_per_actor=0.2 if pg else 1,
     # )
-    actor_model = None 
+    actor_model = None
     ref_model = None
     # if args.init_kl_coef == 0:
     #     ref_model = None
@@ -189,7 +189,7 @@ def train(args):
 
     # train actor and critic mdoel
     master_addr = None
-    master_port = None 
+    master_port = None
     world_size = 1
     rank = 0
     _master_addr = master_addr if master_addr else _get_current_node_ip()
@@ -198,7 +198,7 @@ def train(args):
     os.environ["MASTER_PORT"] = str(_master_port)
     os.environ["WORLD_SIZE"] = str(world_size)
     os.environ["RANK"] = str(rank)
-    
+
     os.environ["LOCAL_RANK"] = "0" # str(ray.get_gpu_ids()[0]) if ray_noset_visible_devices() else "0"
     strategy.setup_distributed()
     pretrain = args.pretrain
@@ -216,7 +216,7 @@ def train(args):
             gradient_checkpointing=args.gradient_checkpointing,
             critic_train_remote=None, # critic_train_remote,
             tokenizer=tokenizer,
-            processor=processor, 
+            processor=processor,
             prompt_max_len=args.prompt_max_len,
             value_clip=args.value_clip,
             eps_clip=args.eps_clip,
@@ -240,9 +240,9 @@ def train(args):
             gt_path=args.gt_path,
             modelfamily=args.modelfamily
         )
-    
+
     evaluator.evaluate(0)
-    
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -421,7 +421,7 @@ if __name__ == "__main__":
     parser.add_argument("--prompt_split", type=str, default="train")
     parser.add_argument("--pretrain_data", type=str, default=None, help="HF dataset name or path")
     parser.add_argument("--eval_data", type=str, default=None, help="HF dataset name or path")
-    
+
     parser.add_argument("--training_mode", type=str, default="train", help="HF dataset name or path")
     parser.add_argument(
         "--pretrain_data_probs",
@@ -456,8 +456,8 @@ if __name__ == "__main__":
 
     # ModelScope parameters
     parser.add_argument("--use_ms", action="store_true", default=False)
-    
-    # additional 
+
+    # additional
     parser.add_argument("--gt_path", type=str, default=None)
     parser.add_argument("--modelfamily", type=str, default='qwen')
     parser.add_argument("--system_prompt", type=str, default='None')
@@ -507,7 +507,7 @@ if __name__ == "__main__":
             "You likely want to pass $'\\n' in Bash or \"`n\" in PowerShell."
         )
 
-    if args.train_vlm: 
+    if args.train_vlm:
         if args.packing_samples:
             print("[Warning] --train_vlm is not supported with --packing_samples. We will set args.packing_samples to False")
             args.packing_samples = False

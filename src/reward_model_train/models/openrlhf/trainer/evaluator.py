@@ -22,7 +22,7 @@ from openrlhf.utils.distributed_sampler import DistributedSampler
 from openrlhf.models.utils import log_probs_from_logits
 
 from .ppo_utils import AdaptiveKLController, Experience, FixedKLController, NaiveExperienceMaker, NaiveReplayBuffer, DATA_PROCESSOR_MAP
-import random 
+import random
 import copy
 import numpy as np
 from collections import defaultdict
@@ -130,7 +130,7 @@ class Evaluator(ABC):
 
         super().__init__()
         self.strategy = strategy
-        
+
         strategy.setup_distributed()
         self.args = strategy.args
         self.rloo_sft = self.args.advantage_estimator.lower() in ['rloo_sft', 'group_sft']
@@ -159,15 +159,15 @@ class Evaluator(ABC):
 
         args = self.args
         self.max_len = args.max_len if args.max_len else args.prompt_max_len + args.generate_max_len
-        
+
         packing_samples = getattr(self.args, "packing_samples", False)
         self.replay_buffer = NaiveReplayBuffer(
             micro_train_batch_size, self.data_processor, buffer_limit, buffer_cpu_offload, packing_samples,
-            drop_maxlen=self.args.drop_maxlen, 
+            drop_maxlen=self.args.drop_maxlen,
             maxlen=self.args.generate_max_len + prompt_max_len,
         )
 
-        self.iter = 0 
+        self.iter = 0
         self.eval_step = 0
         self.best = -1
 
@@ -177,7 +177,7 @@ class Evaluator(ABC):
         print("!!!! eval loader size", len(dataloader), 'step', global_step)
         batchsize = dataloader.batch_sampler.batch_size
         for idx, rand_prompts in enumerate(dataloader):
-            if batchsize>len(rand_prompts): 
+            if batchsize>len(rand_prompts):
                 current_len = len(rand_prompts)
                 needed = batchsize - current_len
                 repeat_indices = np.arange(needed) % current_len
@@ -186,41 +186,41 @@ class Evaluator(ABC):
                 rand_prompts = rand_prompts + additional
             else: needed = 0
             print(f"!!!! ========== eval progress {idx}/{len(dataloader)} ==========")
-            
+
             exp_list = self.get_explist_from_prompts(args, ep, rand_prompts, is_eval=True, eval_step=global_step)
-            
+
             for i, experience in enumerate(exp_list):
                 self.replay_buffer.append_split(experience, is_eval=True)
-                
-                
-            
-        
+
+
+
+
         for item in self.replay_buffer.eval_items:
             info = item.info
             for k in keys:
                 infos[k].append(info[k])
         out_lens = infos['response_length']
-        
+
         for k,vlist in infos.items():
             infos[k] = np.mean(vlist)
         infos['generation_exceed_rate'] = np.mean([x>args.generate_max_len-1 for x in out_lens])
-        
+
         torch.distributed.barrier()
-        gather_info = self.strategy.all_reduce(infos) # mean 
-        
+        gather_info = self.strategy.all_reduce(infos) # mean
+
         return gather_info
-            
-            
-        
+
+
+
     def get_eval_result_from_disk(self):
         args = self.strategy.args
-        from glob import glob 
+        from glob import glob
         # os.makedirs(args.ckpt_path, exist_ok=True)
         # os.makedirs(f'{args.ckpt_path}/logs', exist_ok=True)
         tmp = f'{args.ckpt_path}/logs/sample.eval_iter{self.eval_step}*.jsonl'
         files = glob(tmp)
         print(f'!!!! [eval] reading from disk {len(files)} files', tmp, )
-        
+
         datalist = [read_jsonl(file) for file in files]
         results_each = defaultdict(list)
         q2results = defaultdict(list)
@@ -230,8 +230,8 @@ class Evaluator(ABC):
                 res = x.get('match')
                 if res is None:
                     r0_res = x['round0_correctness']
-                    res = r0_res 
-                    
+                    res = r0_res
+
                 q2results[qid].append(res>0.5)
         # We compute query-wise mean acc, and then average them
         # this is a trick to handle the drop_last=False issue
@@ -244,21 +244,21 @@ class Evaluator(ABC):
         modelpath = args.pretrain
         for k in results_each.keys():
             nc = np.sum(results_each[k])
-            num  = len(results_each[k]) 
+            num  = len(results_each[k])
             dump_info.append(dict(benchname=k, pass1=nc/num, ncorrect=nc, ntotal=num, modelpath=modelpath))
             print(f'!!!! [eval] from disk bench={k}, acc={np.mean(results_each[k])}={nc}/{num}')
             all_results.extend(results_each[k])
             results_each[k] = np.mean(results_each[k])
-        
+
         json.dump(dump_info, open(f'{args.ckpt_path}/logs/metrics_iter{self.eval_step}.json', 'w'))
         acc = np.mean(all_results)
         return acc, results_each
-        
+
     def fill_replay_buffer(self, buffer, num_expected):
         # Ensure every item in buffer appears at least once
         for item in buffer[:num_expected]:
             self.replay_buffer.append_split(item)
-        
+
         # Fill the remaining slots with random choices from buffer
         remaining_slots = num_expected - len(buffer)
         if remaining_slots>0:
@@ -267,7 +267,7 @@ class Evaluator(ABC):
                 self.replay_buffer.append_split(item)
         print(f'!!!! rbuffersize after filling: {len(self.replay_buffer)} should be {num_expected} x nsamples_per_query', )
         # assert len(self.replay_buffer)==num_expected
-        
+
     def get_explist_from_prompts(self, args, ep, all_prompts, append=False, is_eval=False, force_noprefix=False, eval_step=None):
         autocode = getattr(args, "prefix_generation", None)
         requires_group = getattr(args, "advantage_estimator", None) in ['']
@@ -308,16 +308,16 @@ class Evaluator(ABC):
             new_prompts = [x+prefix for x in all_prompts for prefix in self.prefixes[5:6]]
             all_prompts = new_prompts
             generate_kwargs['prefix_lengths'] = [plen for x in all_prompts for plen in self.prefix_lengths[5:6]]
-            
+
         return self.experience_maker.make_experience_list(all_prompts, is_eval=is_eval, eval_step=eval_step, **generate_kwargs)
-        
-            
+
+
     def evaluate(
         self,
         args,
         eval_data
     ) -> None:
-        
+
         tmp = eval_data
         eval_bsz = getattr(args, "eval_batch_size_pergpu", 8)
         eval_dataloader = self.strategy.setup_dataloader(
@@ -336,7 +336,7 @@ class Evaluator(ABC):
         torch.distributed.barrier()
         result2, bench_results = self.get_eval_result_from_disk()
         print(f'!!!! [eval] finish with step {self.eval_step} rank {self.strategy.get_rank()} gathered eval stats', info, 'from disk:', result2)
-        
+
         self.eval_step += 1
         # info['match_overall'] = result2
         for k,v in bench_results.items():
@@ -349,4 +349,4 @@ class Evaluator(ABC):
 
         del eval_dataloader
         self.replay_buffer.eval_items.clear()
-        
+

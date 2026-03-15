@@ -1,7 +1,7 @@
 import os
 import time
 import json
-import re 
+import re
 import pickle as pkl
 from abc import ABC
 from copy import deepcopy, copy
@@ -22,9 +22,9 @@ from datasets import interleave_datasets, load_dataset
 
 from openrlhf.models.actor import Actor
 from openrlhf.models.utils import (
-    compute_approx_kl, 
-    compute_reward, 
-    masked_mean, 
+    compute_approx_kl,
+    compute_reward,
+    masked_mean,
     unpacking_samples
 )
 
@@ -34,8 +34,8 @@ from openrlhf.utils.logging_utils import init_logger
 
 from qwen_vl_utils import (
     smart_resize,
-    process_vision_info, 
-    extract_vision_info, 
+    process_vision_info,
+    extract_vision_info,
     fetch_image
 )
 
@@ -45,7 +45,7 @@ from collections import defaultdict
 # pip install math-verify
 
 from math_verify import (
-    parse, 
+    parse,
     verify
 )
 
@@ -70,17 +70,17 @@ def to_rgb(pil_image: Image.Image) -> Image.Image:
 def extract_qwen_query_and_response(input_text):
     # Split the input text by the assistant's start token
     parts = input_text.split("<|im_start|>assistant\n")
-    
+
     # The first part contains the system and user messages
     user_part = parts[0]
-    
+
     # The second part contains the assistant's response
     if len(parts)==1: assistant_response = ""
     else: assistant_response = "".join(parts[1:])
-    
+
     # Extract the user query by splitting the user part
     user_query = user_part.split("<|im_start|>user\n")[1].split('<|im_end|>')[0].split('<|vision_end|>')[-1]
-    
+
     # Return the user query and the assistant's response
     return user_query, assistant_response
 
@@ -88,17 +88,17 @@ def extract_qwen_query_and_response(input_text):
 def extract_dsmath_query_and_response(input_text):
     # Split the input text by the assistant's start token
     parts = input_text.split("Assistant:")
-    
+
     # The first part contains the system and user messages
     user_part = parts[0]
-    
+
     # The second part contains the assistant's response
     if len(parts)==1: assistant_response = ""
     else: assistant_response = parts[1]
-    
+
     # Extract the user query by splitting the user part
     user_query = user_part.split("User:")[1].strip()
-    
+
     # Return the user query and the assistant's response
     return user_query, assistant_response
 
@@ -107,36 +107,36 @@ def extract_dpsk_query_and_response(input_text):
     # Split the input text by the assistant's start token
     # print(input_text)
     parts = input_text.split("<｜Assistant｜>")
-    
+
     # The first part contains the system and user messages
     if len(parts)==0:
         print('!!!! warning extraction', input_text)
     user_part = parts[0]
-    
+
     # The second part contains the assistant's response
     if len(parts)==1: assistant_response = ""
     else: assistant_response = parts[1]
-    
+
     # Extract the user query by splitting the user part
     user_query = user_part.split("<｜User｜>")[1]
-    
+
     # Return the user query and the assistant's response
     return user_query, assistant_response
 
 def extract_llama_query_and_response(input_text):
     # Split the input text by the assistant's start token
     parts = input_text.split("assistant<|end_header_id|>\n\n")
-    
+
     # The first part contains the system and user messages
     user_part = parts[0]
-    
+
     # The second part contains the assistant's response
     if len(parts)==1: assistant_response = ""
     else: assistant_response = parts[1]
-    
+
     # Extract the user query by splitting the user part
     user_query = user_part.split("user<|end_header_id|>\n\n")[1].split('<|eot_id|><|start_header_id|>')[0]
-    
+
     # Return the user query and the assistant's response
     return user_query, assistant_response
 
@@ -144,20 +144,20 @@ def extract_autocode_query_and_response(input_text):
     # print('!!!! example input', input_text)
     # Split the input text by the assistant's start token
     parts = input_text.split("Response:")
-    
+
     # The first part contains the system and user messages
     user_part = parts[0]
-    
+
     # The second part contains the assistant's response
     if len(parts)==1: assistant_response = ""
     else: assistant_response = parts[1]
-    
+
     # Extract the user query by splitting the user part
     user_query = user_part.split("### Instruction:\n")[1].split('\n\n### ')[0]
-    
+
     # Return the user query and the assistant's response
     return user_query, assistant_response
-    
+
 def to(tensor: Union[torch.Tensor, list[torch.Tensor]], device):
     if isinstance(tensor, list):
         return [to(t, device) for t in tensor]
@@ -174,19 +174,19 @@ def regularize_text(x):
     return x.strip().replace(' ','')
 
 def do_verify(nsol, b):
-    res = 0.0 
+    res = 0.0
     try:
         a = parse(nsol)
         if len(b)>1 and (b[1] in 'ABCDEFGHIJK'):
             res = float(nsol[len("\\boxed{"):].startswith(b[1]))
         else:
             # print(f"debug parsed: {a} from {nsol} and {b}")
-            if len(a)==0: res = -1.0 
+            if len(a)==0: res = -1.0
             else: res = float(verify(a, b))
-    except: 
+    except:
         print(f"!!!! [debug] {nsol} parsing exception")
-        res = -1.0 
-    return res 
+        res = -1.0
+    return res
 
 def normalize_answer(answer):
     if answer is None: return answer
@@ -198,7 +198,7 @@ def normalize_answer(answer):
     if "cm" in answer: answer = answer.replace("cm","")
     # if "^\\circ" in answer: answer = answer.replace("^\\circ","")
     # if "a.m." in answer: answer = answer.replace("a.m.","")
-    return answer 
+    return answer
 
 def handle_boxed(sol, gt, eostoken, format_type, requires_box=False):
     # print(sol)
@@ -210,38 +210,38 @@ def handle_boxed(sol, gt, eostoken, format_type, requires_box=False):
     endstr = "Now everything looks fine. Solution finished."
     index = sol.find(endstr)
     num_end = len(eostoken)
-    
-    if index>-1: 
+
+    if index>-1:
         remains = sol[index+len(endstr)+num_end:]
-        if len(remains)>0: 
-            norepeat = False 
-        else: norepeat = True 
+        if len(remains)>0:
+            norepeat = False
+        else: norepeat = True
     if not (norepeat is False):
         if format_type in ["confidence"]:
             if not ("<confidence>" in sol and "</confidence>" in sol):
                 usefmt = False
-            else: 
+            else:
                 count = sol.count("<confidence>")
-                if count>5: usefmt = False 
-                else: usefmt = True 
+                if count>5: usefmt = False
+                else: usefmt = True
         elif format_type in ["wait"]:
             tmps = sol.lower()
-            usefmt = False 
+            usefmt = False
             if "wait" in tmps or "alternatively" in tmps:
-                usefmt = True 
-            
+                usefmt = True
+
         # elif format_type in ["nocode"]:
         #     if "```python" in sol:
-        #         usefmt = False 
-        #     else: usefmt = True 
-    
-    if (norepeat is False): 
-        pass # no need for correctness 
-    else: 
-        flag = True 
+        #         usefmt = False
+        #     else: usefmt = True
+
+    if (norepeat is False):
+        pass # no need for correctness
+    else:
+        flag = True
         gt = normalize_answer(gt)
         try:
-            if "\\boxed" in gt: 
+            if "\\boxed" in gt:
                 b = parse(gt)
                 # print('!!!! debug gt parse', gt, b)
             else:
@@ -249,81 +249,81 @@ def handle_boxed(sol, gt, eostoken, format_type, requires_box=False):
         except Exception as e:
             print(f"!!!! [debug] {gt} parsing exception")
             res = -1.0
-            flag = False 
+            flag = False
         if flag:
-            if len(b)==0: res = -1.0 
-            else: 
+            if len(b)==0: res = -1.0
+            else:
                 if requires_box:
                     boxed_index = sol.rindex("boxed")
-                    if boxed_index==-1: res = 0.0 
+                    if boxed_index==-1: res = 0.0
                     else:
                         nsol = '\\'+sol[boxed_index:]
                         res = do_verify(normalize_answer(nsol), b)
-                else: 
-                    flag = False 
-                    
+                else:
+                    flag = False
+
                     for indicator in ["\\boxed", "<answer>", "Answer:"]:
                         if indicator in sol:
                             if indicator == "<answer>":
                                 found = re.search("<answer>(.*?)</answer>", sol)
                                 if found:
                                     nsol = f"\\boxed{{{found.group(1)}}}"
-                                else: continue 
+                                else: continue
                             elif indicator == "Answer:":
                                 tmp = sol.split(indicator)
                                 if len(tmp)>0: tmp = tmp[-1].strip() # .split(eostoken)[0].strip()
-                                else: continue 
+                                else: continue
                                 nsol = f"\\boxed{{{tmp}}}"
-                            else: 
+                            else:
                                 boxed_index = sol.rindex(indicator)
                                 pred = sol[boxed_index:].strip()
                                 nsol = pred
                             res = do_verify(normalize_answer(nsol), b)
-                            if res > 0.99: 
-                                flag = True 
-                        if flag: 
+                            if res > 0.99:
+                                flag = True
+                        if flag:
                             break
                     # print("extracted sol", nsol)
                     if not flag:
-                        nsol = sol 
+                        nsol = sol
                         res = do_verify(normalize_answer(nsol), b)
-        
-                    
-    return norepeat, usefmt, res 
+
+
+    return norepeat, usefmt, res
 
 def rule_reward(sol, gt, eostoken, format_type, requires_box, *args):
-    # valid = eos & boxed 
-    error_info = None 
-    valid = True 
-    if eostoken not in sol and "<|endoftext|>" not in sol: 
+    # valid = eos & boxed
+    error_info = None
+    valid = True
+    if eostoken not in sol and "<|endoftext|>" not in sol:
         valid = False
         error_info = "No eos."
     elif requires_box and "boxed" not in sol:
-        valid = False 
+        valid = False
         error_info = "No valid boxed."
     elif sol.lower().count("wait")>5:
         valid = False
         error_info = "too many waits"
-    ############ this is only for debugging 
+    ############ this is only for debugging
     # if format_type=='wait':
-    # tmps = sol.lower() 
+    # tmps = sol.lower()
     # if "wait" not in tmps and "alternatively" not in tmps:
-    #     valid = False 
-    
-    # formats and correctness 
+    #     valid = False
+
+    # formats and correctness
     norepeat = None
     usefmt = None
     res = 0.0
     # directly making no-boxed and no-eos as invalid seems unnecessary and harmful:
     # the model needs to understand these are unacceptable
-    # if not valid: 
-    #     pass 
-    # else: 
+    # if not valid:
+    #     pass
+    # else:
     if isinstance(gt, list):
         gt = [xx.lower() for xx in gt]
         has_percent = None
         for xx in gt:
-            if "%" in xx: 
+            if "%" in xx:
                 has_percent = xx.replace('%','')
                 break
         if has_percent is not None and has_percent not in gt:
@@ -338,8 +338,8 @@ def rule_reward(sol, gt, eostoken, format_type, requires_box, *args):
             break
         else:
             # handle multi-span: troubles, the siege of krishnapur
-            is_multispan = ',' in ans 
-            
+            is_multispan = ',' in ans
+
             if is_multispan:
                 splits = [x.lower().strip() for x in ans[len("\\boxed{"):-1].split(',')]
                 cnt = 0 # this could overestimate
@@ -352,8 +352,8 @@ def rule_reward(sol, gt, eostoken, format_type, requires_box, *args):
                             cnt += 1
                     if cnt==len(splits):
                         res = 1.0
-                        break 
-    return valid, norepeat, usefmt, error_info, res 
+                        break
+    return valid, norepeat, usefmt, error_info, res
 
 
 def batch_rule_reward(sols, gts, eostoken, format_type, *args):
@@ -366,15 +366,15 @@ def batch_rule_reward(sols, gts, eostoken, format_type, *args):
 def find_last_code_block(text):
     # Define the regex pattern to match code blocks enclosed with ```python and ```
     pattern = r'```python(.*?)```'
-    
+
     # Reverse the text and the pattern
     reversed_text = text[::-1]
-    
+
     reversed_pattern = r'```(.*?)nohtyp```'
-    
+
     # Search for the reversed pattern in the reversed text
     match = re.search(reversed_pattern, reversed_text, re.DOTALL)
-    
+
     if match:
         # Extract the matched group, reverse it back to get the original code block
         reversed_code_block = match.group(1).strip()
@@ -385,44 +385,44 @@ def find_last_code_block(text):
 
 
 def rule_reward_with_code(sol, gt, eostoken, format_type, executor):
-    error_info = None 
-    # valid = eos & boxed 
-    valid = True 
-    # formats and correctness 
+    error_info = None
+    # valid = eos & boxed
+    valid = True
+    # formats and correctness
     norepeat = None
     usefmt = None
     res = 0.0
-    if eostoken not in sol: 
+    if eostoken not in sol:
         valid = False
-        return valid, norepeat, usefmt, error_info, res 
+        return valid, norepeat, usefmt, error_info, res
     if "```python" in sol:
         code = find_last_code_block(sol)
-        if code is None: # no code found 
-            valid = False 
+        if code is None: # no code found
+            valid = False
             error_info = "No valid code block."
-            return valid, norepeat, usefmt, error_info, res 
+            return valid, norepeat, usefmt, error_info, res
         pred, error_info = executor.apply(code)
         if error_info=='Done':
             try:
                 b = parse(f"\\boxed{{{gt}}}")
-                
+
                 nsol = '\\boxed{'+pred+'}'
                 a = parse(nsol)
-                
-                if len(a)==0: res = -1.0 
+
+                if len(a)==0: res = -1.0
                 else: res = float(verify(a, b))
             except:
-                res = -1.0 
+                res = -1.0
             error_info += f": {pred}"
-        else: res = 0.0 
+        else: res = 0.0
         # print(res, pred, error_info)
     else:
         if "boxed" not in sol:
-             valid = False 
-             return valid, norepeat, usefmt, "No valid boxed.", res 
-        
+             valid = False
+             return valid, norepeat, usefmt, "No valid boxed.", res
+
         norepeat, usefmt, res = handle_boxed(sol, gt, eostoken, format_type)
-    return valid, norepeat, usefmt, error_info, res 
+    return valid, norepeat, usefmt, error_info, res
 
 def batch_rule_reward_with_code(sols, gts, eostoken, format_type, executor, requires_box=False):
     rets = []
@@ -430,99 +430,99 @@ def batch_rule_reward_with_code(sols, gts, eostoken, format_type, executor, requ
 
     # print('!!!! inside reward requires box', requires_box)
     for ii,(sol,gt) in enumerate(zip(sols, gts)):
-        error_info = None 
-        # valid = eos & boxed 
-        valid = True 
-        # formats and correctness 
+        error_info = None
+        # valid = eos & boxed
+        valid = True
+        # formats and correctness
         norepeat = None
         usefmt = None
         res = 0.0
-        usecode = None 
-        if eostoken not in sol: 
+        usecode = None
+        if eostoken not in sol:
             valid = False
-            ret = valid, norepeat, usefmt, error_info, usecode, res 
+            ret = valid, norepeat, usefmt, error_info, usecode, res
             rets.append(ret)
             # print('!!!! not valid: no eos', sol)
             continue
         if "```python" in sol:
             code = find_last_code_block(sol)
-            usecode = True 
-            if code is None: # no code found 
-                valid = False 
+            usecode = True
+            if code is None: # no code found
+                valid = False
                 # print('!!!! not valid: no code', sol)
                 error_info = "No valid code block."
-                ret = valid, norepeat, usefmt, error_info, usecode, res 
+                ret = valid, norepeat, usefmt, error_info, usecode, res
                 rets.append(ret)
-                continue 
+                continue
             codes.append(code)
             code_i.append(ii)
-            ret = valid, norepeat, usefmt, error_info, usecode, res 
+            ret = valid, norepeat, usefmt, error_info, usecode, res
             rets.append(ret)
-            continue 
-            
+            continue
+
         else:
-            usecode = False 
+            usecode = False
             if requires_box and ("boxed" not in sol):
-                valid = False 
-                ret = valid, norepeat, usefmt, "No valid boxed.", usecode, res 
+                valid = False
+                ret = valid, norepeat, usefmt, "No valid boxed.", usecode, res
                 rets.append(ret)
-                continue 
-            
+                continue
+
             norepeat, usefmt, res = handle_boxed(sol, gt, eostoken, format_type, requires_box=requires_box)
-            ret = valid, norepeat, usefmt, error_info, usecode, res 
+            ret = valid, norepeat, usefmt, error_info, usecode, res
             rets.append(ret)
-            continue 
-        
+            continue
+
         if format_type in ['nocode']:
-            if '```python' in sol: usefmt = False 
+            if '```python' in sol: usefmt = False
             else: usefmt = True
-        
+
     #####
     if len(codes)>0:
         tmp = [executor.apply(c) for c in codes]
         preds, error_infos = list(zip(*tmp))
         for ii,code,pred,error_info in zip(code_i,codes,preds,error_infos):
             if error_info=='Done':
-                flag = True 
+                flag = True
                 try:
                     gt = gts[ii]
                     b = parse(f"\\boxed{{{gt}}}")
                 except:
-                    res = -1.0 
-                    flag = False 
-                if flag: 
+                    res = -1.0
+                    flag = False
+                if flag:
                     nsol = pred
                     res = do_verify(nsol, b)
                 error_info += f": {pred}"
-            else: res = 0.0 
+            else: res = 0.0
             valid, norepeat, usefmt, _, usecode, _ = rets[ii]
-            rets[ii] = valid, norepeat, usefmt, error_info, usecode, res 
-    
+            rets[ii] = valid, norepeat, usefmt, error_info, usecode, res
+
     return rets
-        
+
 def prepare_target(prompt, eos_token):
-    if "</think>" in prompt: 
-        tmp = prompt.split("</think>")[0]+"</think>" 
+    if "</think>" in prompt:
+        tmp = prompt.split("</think>")[0]+"</think>"
         # print('!!!! prepare', [tmp])
         return tmp + eos_token
-    else: return prompt 
-    
+    else: return prompt
+
 
 
 def handle_placeholders(texts):
     newlist = []
     placeholder = "<image>"
     replacewith = "<|vision_start|><|image_pad|><|vision_end|>"
-    
+
     for message in texts:
-        new = message 
+        new = message
         for key in ["<|vision_start|>","<|image_pad|>","<|vision_end|>"]:
             new = new.replace(key,"")
-        
-        # now new has no replacewith 
+
+        # now new has no replacewith
         if new.count(placeholder)>0:
             new = new.replace(placeholder, replacewith)
-        else: 
+        else:
             new = replacewith + new
         newlist.append(new)
     return newlist
@@ -551,14 +551,14 @@ def crop_image_normalized(image, bbox_2d,  padding=0.1):
     cropped_image = image.crop((normalized_x1*image_x, normalized_y1*image_y, normalized_x2*image_x, normalized_y2*image_y))
     w, h = cropped_image.size
     assert w > 28 and h > 28, f"Cropped image is too small: {w}x{h}"
-    return cropped_image 
+    return cropped_image
 
 
 def execute_tool(images, rawimages, args, toolname, is_video, function=None):
     if toolname=='select_frames':
         tgt = args['target_frames']
         if len(tgt)>8:
-            
+
             message = f"You have selected {len(tgt)} frames in total. Think again which frames you need to check in details (no more than 8 frames)"
             # [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
             ##### controlled modification
@@ -575,7 +575,7 @@ def execute_tool(images, rawimages, args, toolname, is_video, function=None):
                     tgt = sorted(tgt)
                 selected_frames = function(images[0], tgt)
                 message = tgt
-            else: 
+            else:
                 selected_frames = []
             # selected_frames = function(images[0], [x-1 for x in tgt][::2]) # video is always in the first item
         elif max(tgt)>len(images[0]):
@@ -591,10 +591,10 @@ def execute_tool(images, rawimages, args, toolname, is_video, function=None):
     else:
         tgt = args['target_image']
         if is_video:
-            if len(images)==1: # there is only 
-                # we default the candidate images into video frames 
+            if len(images)==1: # there is only
+                # we default the candidate images into video frames
                 video_frames = images[0]
-                index = tgt - 1 
+                index = tgt - 1
                 assert index<len(video_frames), f"Incorrect `target_image`. You can only select frames in the given video within [1,{len(video_frames)}]"
                 image_to_crop = video_frames[index]
             else: # there are zoomed images after the video; images = [[video], image, image, image]
@@ -603,9 +603,9 @@ def execute_tool(images, rawimages, args, toolname, is_video, function=None):
                 assert index<len(cand_images), f"Incorrect `target_image`. You can only select a previous frame within [1,{len(cand_images)}]"
                 image_to_crop = cand_images[index]
         else:
-            index =  tgt-1 
+            index =  tgt-1
             assert index<len(images), f"Incorrect `target_image`. You can only select previous images within [1,{len(images)}]"
-            
+
             if index<len(rawimages):
                 tmp = rawimages[index]
             else:
@@ -621,10 +621,10 @@ def get_required_messages(messages):
     final = []
     for conversations in conversations_list:
         message_list = [Message(role="system", content=[ContentItem(text="You are a helpful assistant.")])]
-        
+
         for entry in conversations:
             role = entry['role']
-            
+
             content = entry['content']
             contlist = []
             for cont in content:
@@ -642,17 +642,17 @@ def get_prompt_from_messages(old_format_messages, prompt_maker, tools, processor
     if len(tools)>0:
         messages = [prompt_maker.preprocess_fncglobal_messages(
             messages=msg,
-            functions=tools, 
+            functions=tools,
             lang=None
         ) for msg in messages]
 
     messages = [[x.model_dump() for x in conversations] for conversations in messages]
-    
+
     prompts = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    
+
     return prompts, messages
-    
-    
+
+
 def create_action_mask_up_to_last_eos(
     sequences: torch.Tensor,
     eos_token_id: int,
@@ -721,7 +721,7 @@ def create_assistant_response_mask(mask, inputs, processor):
             # Check if the token after im_start is "assistant"
             if pos + 1 < len(sequence) and sequence[pos + 1] == assistant:
                 # Find the next im_end
-                
+
                 next_end = sequence[pos:].eq(im_end).nonzero()
                 if len(next_end) > 0:
                     end_pos = pos + next_end[0].item()
@@ -729,7 +729,7 @@ def create_assistant_response_mask(mask, inputs, processor):
                     # print('=====')
                     # Mark the entire response (including the im_start and im_end tokens)
                     mask[i, pos:end_pos + 1] = True
-    
+
     return mask
 
 # export MIN_PIXELS=50176
@@ -753,7 +753,7 @@ def resize_cropped(image, min_pixels=None, max_pixels=None):
     )
     print('resize cropped min max', min_pixels, max_pixels)
     image = image.resize((resized_width, resized_height))
-    return image 
+    return image
 
 
 @register_tool("select_frames")
@@ -808,7 +808,7 @@ Zoom in on the image based on the bounding box coordinates. It is useful when th
         },
         "required": ["bbox_2d", "target_image"]
     }
-    
+
     def call(self, image, bbox_2d,  padding=0.1):
         """
         Crop the image based on the bounding box coordinates.
@@ -829,9 +829,9 @@ Zoom in on the image based on the bounding box coordinates. It is useful when th
 
 
 
-        return cropped_image 
-    
-    
+        return cropped_image
+
+
 
 @dataclass
 class Experience:
@@ -877,7 +877,7 @@ class Experience:
         self.info = {key: to(value, device) if isinstance(value, torch.Tensor) else value for key, value in self.info.items()}
         if self.visual_inputs is not None:
             self.visual_inputs = {key: to(value, device) for key, value in self.visual_inputs.items()}
-        if self.validity is not None: 
+        if self.validity is not None:
             self.validity = to(self.validity, device)
         return self
 
@@ -893,7 +893,7 @@ class Experience:
         self.info = {key: pin_memory(value) if isinstance(value, torch.Tensor) else value for key, value in self.info.items()}
         if self.visual_inputs is not None:
             self.visual_inputs = {key: pin_memory(value) for key, value in self.visual_inputs.items()}
-        if self.validity is not None: 
+        if self.validity is not None:
             self.validity = pin_memory(self.validity)
         return self
 
@@ -932,8 +932,8 @@ class Samples:
     prompts: list[str]
     visual_inputs: Optional[Dict]
     na_each: list[int]
-    round0_correctness: list 
-    round1_correctness: list 
+    round0_correctness: list
+    round1_correctness: list
     round0_nwait: list[int]
     round1_nwait: list[int]
     questions: list[str]
@@ -1028,7 +1028,7 @@ class BaseAgentWrapper(ABC):
         Then, if we need certain processing for the rewards or do certain filtering, we can process the rollout as a whole.
         After that, we will calculate the advantages and returns for each experience.
         """
-        pass 
+        pass
 
     @torch.no_grad()
     def generate_samples(self, global_prompts: List[str], **generate_kwargs) -> List[Samples]:
@@ -1092,18 +1092,18 @@ class BaseAgentWrapper(ABC):
         tmp = [experience.info["reward"] for experience in experiences]
         ns =  [experience.info["response_length"]  for experience in experiences]
         match = [experience.info["match"]  for experience in experiences]
-        ns = np.array(ns).reshape((-1, nsample)) 
-        match = np.array(match).reshape((-1, nsample)) 
+        ns = np.array(ns).reshape((-1, nsample))
+        match = np.array(match).reshape((-1, nsample))
         ns_diff = []
-        for idx, match_i in enumerate(match): 
-            # when there is no correct 
-            if np.sum(match_i)==0: 
+        for idx, match_i in enumerate(match):
+            # when there is no correct
+            if np.sum(match_i)==0:
                 ns_diff.append(np.zeros_like(ns[idx]))
-            else: 
-                mean_switch = np.sum(ns[idx] * match_i)/np.sum(match_i) # average length of correct response 
-                len_adv = (ns[idx]-mean_switch)*(match_i>0.5) # positive values of longer 
+            else:
+                mean_switch = np.sum(ns[idx] * match_i)/np.sum(match_i) # average length of correct response
+                len_adv = (ns[idx]-mean_switch)*(match_i>0.5) # positive values of longer
                 max_adv = abs(max(len_adv)) # right delta
-                min_adv = abs(min(len_adv)) # left delta 
+                min_adv = abs(min(len_adv)) # left delta
                 # if min_adv<0: min_adv = -min_adv
                 len_adv[len_adv>0] /= max_adv # normalized to [-1.0, 1.0]
                 len_adv[len_adv<0] /= min_adv
@@ -1118,16 +1118,16 @@ class BaseAgentWrapper(ABC):
         print(f'!!!! [rbuffer] The estimator {args.advantage_estimator} is processing {len(experiences)} queries in a batch, each {len(tmp[0])} responses, longer={do_longer}')
         # reward shaping for RLOO
         if args.advantage_estimator in ["rloo","gloo","rloo_sft"]: # this operates in batch level
-            rewards = torch.cat(tmp) 
+            rewards = torch.cat(tmp)
             rewards = rewards.reshape(-1, nsample).to(device="cuda")  # (bsz,nsample) into groups
-            
+
             if do_longer:
                 bonus_tensor = torch.from_numpy(bonus).to(rewards.device).to(rewards.dtype)
                 rewards += bonus_tensor
                 # print('!!!! shaped reward', rewards.detach().cpu().numpy())
             else:
                 print('!!!! [rbuffer] reward not using wait')
-            baseline = (rewards.sum(-1, keepdim=True) - rewards) / (nsample - 1) # mean of others 
+            baseline = (rewards.sum(-1, keepdim=True) - rewards) / (nsample - 1) # mean of others
             rewards = rewards - baseline
             rewards = rewards.flatten().to(device="cpu").chunk(len(experiences))
             return experiences, rewards
@@ -1140,16 +1140,16 @@ class BaseAgentWrapper(ABC):
             rewards = rewards.reshape(-1).to(device="cpu").chunk(len(experiences))
             return experiences, rewards
         elif args.advantage_estimator in ["group", "group_sft"]: # this operates in batch level
-            rewards = torch.cat(tmp) 
+            rewards = torch.cat(tmp)
             rewards = rewards.reshape(-1, nsample) # .to(device="cuda")  # (bsz,nsample) into groups
-            raw_r = rewards.detach().numpy() # bsz,nsamples 
+            raw_r = rewards.detach().numpy() # bsz,nsamples
             mean_acc = np.tile(raw_r.mean(-1, keepdims=True), (1,nsample))
             solve_all = mean_acc>0.95
             solve_none = mean_acc<0.05
             easy = mean_acc>0.7
             hard = mean_acc<0.35
             medium = np.logical_not(np.logical_or(easy, hard))
-            
+
             difficulty, solve_all, solve_none, easy, hard, medium = [x.reshape((len(experiences), -1)).astype(float) for x in [mean_acc, solve_all, solve_none, easy, hard, medium]]
             global_waits = []
             global_waits0 = []
@@ -1176,16 +1176,16 @@ class BaseAgentWrapper(ABC):
             # global_waits = (np.logical_and(reshaped_nwait_round1>0, reshaped_nwait_round1<=2)).astype(float)
             # too_many_waits = (reshaped_nwait_round1>2).astype(float)
             # global_waits = torch.from_numpy(global_waits).to(rewards.device)
-            baseline = rewards.sum(-1, keepdim=True) / (nsample) # mean of others 
+            baseline = rewards.sum(-1, keepdim=True) / (nsample) # mean of others
             rewards = rewards - baseline
-            
+
             if do_longer:
                 print('!!!! length bonus', bonus)
                 bonus_tensor = torch.from_numpy(bonus).to(rewards.device).to(rewards.dtype).reshape(rewards.shape)
                 rewards  = (bonus_tensor+1)*rewards
             # else:
                 # print('!!!! not using wait')
-            rewards = rewards.flatten().to(device="cpu").chunk(len(experiences)) # num_exp, 
+            rewards = rewards.flatten().to(device="cpu").chunk(len(experiences)) # num_exp,
             return experiences, rewards
         # default rewards
         return experiences, tmp
@@ -1308,7 +1308,7 @@ def check_imagepad(processor, batch_texts, batch_images):
     imagepad = processor.tokenizer.encode("<|image_pad|>")[0]
     ntokens = [(x==imagepad).to(float).sum().item() for x in input_ids]
     print(f"autoprocessor output says the images patches are {ntokens}")
-    
+
 class vllmAgentWrapper(BaseAgentWrapper):
 
     def __init__(self, *args, vllm_engines: List = None, packing_samples=False, **kwargs):
@@ -1316,11 +1316,11 @@ class vllmAgentWrapper(BaseAgentWrapper):
         self.vllm_engines = vllm_engines
         self.packing_samples = packing_samples
         self.rule_reward_func = batch_rule_reward
-        self.q2gt = dict() 
+        self.q2gt = dict()
         self.q2r = defaultdict(list)
         for dp in self.gt_path:
             # dp = gt_path
-            if dp is None: continue 
+            if dp is None: continue
             print('!!!! adding gts for', dp)
             ext = dp.split('.')[-1]
             if ext in ["json", "jsonl", "csv"]:
@@ -1330,7 +1330,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
                 data = datasets.load_dataset(ext, data_files=dp)
                 self.qkey = 'question'
                 self.gt_key = 'gt_answer'
-                
+
             else:
                 if dp.endswith('parquet'): data = load_dataset('parquet', data_files=dp)
                 else: data = load_dataset(dp)
@@ -1339,27 +1339,27 @@ class vllmAgentWrapper(BaseAgentWrapper):
                 self.qkey = 'question'
                 self.gt_key = 'answer'
             self.qidkey = 'qid'
-                
+
             full_list = []
-            for k,v in data.items(): 
+            for k,v in data.items():
                 full_list.extend(v.to_list())
             data = full_list
-            
+
             # q2gt
-            # q2gt = dict() 
+            # q2gt = dict()
             # do we need to regularize the question?
-            for item in data: 
+            for item in data:
                 self.q2gt[item[self.qidkey]] = item[self.gt_key]
-                if 'responses' in item: 
+                if 'responses' in item:
                     self.q2r[item[self.qidkey]].extend(item['responses'])
         dataver = getattr(self.strategy.args, "data_version", "red")
-        
+
         if 'use_response' in dataver:
             assert len(self.q2r)>0, "no q2responses for red mode."
-        
+
         if self.custom_reward_func:
             self.custom_reward_func = ray.remote(self.custom_reward_func)
-        self.parse_code = False 
+        self.parse_code = False
 
         self.executor = None
         ###### old version
@@ -1367,7 +1367,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
         ####### new version
         self.operations = dict(crop_image_normalized=CropImageNormalized(), select_frames=SelectFrames())
         notool = getattr(self.strategy.args, "system_prompt", "none")=="notool"
-        
+
         self.tools = [] if notool else [self.operations[fn_tool].function for fn_tool in ['crop_image_normalized', 'select_frames']]
         print(f"!!!! [check] prompt notool={notool}")
         self.prompt_maker = NousFnCallPrompt()
@@ -1385,7 +1385,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
             return list(zip(*[extract_dsmath_query_and_response(qq) for qq in queries]))
         else:
             raise Exception('Not implemented')
-        
+
     @torch.no_grad()
     def make_experience_list(self, global_prompts: Union[str, List[str]], is_eval=False, **generate_kwargs) -> List[Experience]:
         print("===> [verbose] remoteEMaker make_experience_list()")
@@ -1403,22 +1403,21 @@ class vllmAgentWrapper(BaseAgentWrapper):
             samples_list = self.generate_samples(global_prompts, use_response=True, **generate_kwargs)
         else:
             samples_list = self.generate_samples(global_prompts, **generate_kwargs)
-        
+
         experiences = []
         nsample = 1 if is_eval else args.n_samples_per_prompt
         print(f"===> [verbose] all synced. REMaker get_experience(): single experience is arranged as {args.micro_rollout_batch_size} qas, and nsample={nsample}")
         for batched_sample in tqdm(samples_list):
-            # breakpoint()
             tmp = self.get_logprobs_and_logs(batched_sample, is_eval=is_eval, validity=None)
             experiences.append(tmp.to_device("cpu"))
         dist.barrier()
         print(f"===> [verbose] REMaker get_experience(): all samples done logp {len(samples_list)}")
         experiences, rewards = self.handle_advantages(experiences, nsample=nsample)
-        
+
         # calculate return and advantages
         for experience, reward in zip(experiences, rewards):
-            if experience.action_log_probs is None: continue 
-            
+            if experience.action_log_probs is None: continue
+
             # experience = experience.to_device("cuda")
             # reward = reward.to(device="cuda") # tensor of shape (queries,)
             num_actions = experience.info["num_actions"] # list of shape (queries,)
@@ -1436,7 +1435,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
                 num_actions=num_actions,
                 reward_clip_range=args.reward_clip_range,
             ) # list of tensor, each shape (ntokens,)
-            
+
             if self.advantage_estimator == "gae":
                 experience.advantages, experience.returns = self.get_advantages_and_returns(
                     experience.values,
@@ -1453,15 +1452,15 @@ class vllmAgentWrapper(BaseAgentWrapper):
                 )
                 experience.advantages = deepcopy(experience.returns)
                 experience.info["return"] = [x.mean() for x in experience.advantages]
-                
+
             else:
                 raise Exception(f"Unkown advantage_estimator {self.advantage_estimator}")
 
             experience.kl = None
             del experience.info["num_actions"]
             # experience.to_device("cpu")
-    
-        
+
+
         if self.critic is not None:
             for experience in experiences:
                 # send experience to critic
@@ -1498,13 +1497,13 @@ class vllmAgentWrapper(BaseAgentWrapper):
         else:
             questions, solutions = self.separate_qa(queries)
         gts = [self.q2gt.get(q, None) for q in potential_qids]
-        
+
         format_type = getattr(self.strategy.args, "format", None)
         sysprompt = getattr(self.strategy.args, "system_prompt", None)
         requires_box = False if self.parse_code or sysprompt=='dpsk' else True # sysprompt !='autocode'
         rets = self.rule_reward_func(solutions, gts, self.tokenizer.eos_token, format_type, self.executor, requires_box)
-        return rets 
-        
+        return rets
+
     @torch.no_grad()
     def get_logprobs_and_logs(self, batched_sample: Samples, is_eval=False, validity=None, ) -> Experience:
         """
@@ -1521,21 +1520,21 @@ class vllmAgentWrapper(BaseAgentWrapper):
         attention_mask = batched_sample.attention_mask
         action_mask = batched_sample.action_mask
         num_actions = batched_sample.num_actions
-        na_each = batched_sample.na_each 
+        na_each = batched_sample.na_each
         packed_seq_lens = batched_sample.packed_seq_lens
         visual_inputs = batched_sample.visual_inputs
         prompts = batched_sample.prompts
         round0_correctness = batched_sample.round0_correctness
         round1_correctness = batched_sample.round1_correctness
-        round0_nwait = batched_sample.round0_nwait 
-        round1_nwait = batched_sample.round1_nwait 
-        questions = batched_sample.questions 
+        round0_nwait = batched_sample.round0_nwait
+        round1_nwait = batched_sample.round1_nwait
+        questions = batched_sample.questions
         solutions = batched_sample.solutions
         potential_qids = batched_sample.qids
         eff_labels = batched_sample.efficiency_label
-        
+
         num_seq = len(sequences) # default to cpu device
-        
+
         start = time.time()
         device = 'cuda'
         sequences_cpu, attention_mask_cpu = (
@@ -1544,7 +1543,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
         )
         visual_inputs_cpu = None
         if visual_inputs is not None:
-            visual_inputs_cpu = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in visual_inputs.items()}        
+            visual_inputs_cpu = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in visual_inputs.items()}
         # init log probs
         if self.initial_model is not None:
             base_action_log_probs_ref = self.initial_model.forward.remote(
@@ -1571,7 +1570,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
 
         # rewards
         r_refs = []
-        
+
         if args.colocate_global_models and self.reward_model:
             ray.get(r_refs)
             ray.get([self.reward_model[0].empty_cache.remote()])
@@ -1597,18 +1596,18 @@ class vllmAgentWrapper(BaseAgentWrapper):
         eostoken = self.tokenizer.eos_token
         data_version = getattr(args, "data_version", None)
         force_wait = "force_append_wait" in data_version
-        if not (self.reward_model or self.remote_rm_url): 
-            
+        if not (self.reward_model or self.remote_rm_url):
+
             rewards = []
             validity = []
-            
+
             format_type = getattr(self.strategy.args, "format", None)
             sysprompt = getattr(self.strategy.args, "system_prompt", None)
             requires_box = False if self.parse_code or sysprompt in ['dpsk','notrigger'] else True # sysprompt !='autocode'
             print(f'requires_box={requires_box}')
             # num = len(questions)
-            
-            if use_response and not is_eval: 
+
+            if use_response and not is_eval:
                 error_infos = [None for _ in range(num)]
                 use_codes = [0.0 for _ in range(num)]
                 validity = [1.0 for _ in range(num)]
@@ -1617,50 +1616,50 @@ class vllmAgentWrapper(BaseAgentWrapper):
                 # ns_in_correct = [1.0 for _ in range(num)]
                 round0_nwait = [0.0 for _ in range(num)]
                 round1_nwait = [0.0 for _ in range(num)]
-                raw_rewards = [1.0 for _ in range(num)] 
+                raw_rewards = [1.0 for _ in range(num)]
                 exceptions = [0.0 for _ in range(num)]
-            else: 
+            else:
                 for iidx,(ret0,ret1) in enumerate(zip(round0_correctness, round1_correctness)):
                     # print('!!!! solution', sol)
                     if ret1 is None: ret = ret0
                     else: ret = ret1
                     if self.parse_code:
                         valid, norepeat, usefmt, error_info, usecode, final_correct = ret
-                    else: 
+                    else:
                         valid, norepeat, usefmt, error_info, final_correct = ret
                         usecode = False
-                    
-                    if initial_validity: 
+
+                    if initial_validity:
                         valid = initial_validity[iidx] and valid
                     error_infos.append(error_info)
                     use_codes.append(usecode)
                     validity.append(1.0 if valid else 0.0 )
-                    norepeat_rewards.append(norepeat) 
+                    norepeat_rewards.append(norepeat)
                     usefmt_rewards.append(usefmt)
                     # ns_in_correct.append(0.0)
                     raw_rewards.append(1.0 if final_correct>0 else 0.0)
                     exceptions.append(1.0 if final_correct<0 else 0.0)
-                    
+
             # for valid, final_correct in zip(validity, raw_rewards):
             # for valid, final_correct, r0nw, r1nw, r1c, eff_flag in zip(validity, raw_rewards, round0_nwait, round1_nwait, round1_correctness, eff_labels):
             #     if valid>0.5:
-            #         shaped_reward = 1.0 if final_correct>0.5 else 0.0 
+            #         shaped_reward = 1.0 if final_correct>0.5 else 0.0
             #     else:
             #         shaped_reward = -0.1
             #     ########### it seems not proper to use additive rewards
             #     if not is_eval:
-            #         if eff_flag>0.5: # there is a solution without using tool 
+            #         if eff_flag>0.5: # there is a solution without using tool
             #             if final_correct>0.5 and r0nw>0:
             #                 shaped_reward = max(shaped_reward - 0.1*r0nw, 0.6)
-                      
+
             #     print(f"===> [verbose] shaped_reward={shaped_reward}, final_correct={final_correct}, r0nw={r0nw}, r1nw={r1nw}, r1c={r1c}")
-                
+
             #     rewards.append(shaped_reward)
             if is_eval:
-                rewards = raw_rewards 
+                rewards = raw_rewards
             else:
-                rewards = batched_sample.shaped_rewards 
-            
+                rewards = batched_sample.shaped_rewards
+
             # uniformity = batched_sample.uniformity
             print(f"===> [verbose] shaped_reward={rewards}")
             rewards = torch.FloatTensor(rewards) # a list of tensor, tensor shape = queries shape
@@ -1670,7 +1669,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
             "response_length": batched_sample.response_length,
             "total_length": batched_sample.total_length,
             "num_actions": na_each,
-            "validity": validity, 
+            "validity": validity,
             "norepeat": [0.0 if x is None else float(x) for x in norepeat_rewards],
             "usefmt": [0.0 if x is None else float(x) for x in usefmt_rewards],
             "match": [0.0 if x is None else float(x)  for x in raw_rewards],
@@ -1691,12 +1690,12 @@ class vllmAgentWrapper(BaseAgentWrapper):
             "curiosity": batched_sample.curiosity_bonus,
             "penalty": batched_sample.penalty_bonus
         }
-            
-        if base_action_log_probs is not None:   
+
+        if base_action_log_probs is not None:
             base_action_log_probs = base_action_log_probs.to(device)
         if value is not None:
             value = value.to(device)
-        
+
         # rewards = [r.to(device) for r in rewards]
         # r = self.reward_fn(rewards) if len(rewards) > 0 else rewards[0]
 
@@ -1708,7 +1707,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
             torch.cuda.empty_cache()
 
         # log probs
-        
+
         if is_eval or use_response:
             action_log_probs = None
         else:
@@ -1734,7 +1733,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
             kl = torch.zeros_like(action_log_probs, dtype=action_log_probs.dtype, device='cpu')
 
         if is_eval or use_response:
-            kl_mean_log = None 
+            kl_mean_log = None
             kl_mean = None
         else:
             if not self.packing_samples:
@@ -1751,9 +1750,9 @@ class vllmAgentWrapper(BaseAgentWrapper):
 
                 kl = unpacking_samples(kl, num_actions)
                 kl_mean = torch.tensor([each_kl.mean() for each_kl in kl], device=device)
-                
+
             kl_mean_log = kl_mean.detach().cpu().numpy().tolist()
-        
+
         info['kl'] =  kl_mean
         if self.strategy.args.perf:
             self.perf_stats["actor_value_rm_time"] += actor_value_rm_time
@@ -1772,64 +1771,64 @@ class vllmAgentWrapper(BaseAgentWrapper):
             visual_inputs=visual_inputs,
             validity=validity
         )
-        
+
         if self.actor: self.actor.train()  # reset model state
 
         # print('!!!! [debug] logging on', self.strategy.get_rank())
         if self.strategy.is_rank_0() or is_eval:
             log_file = self.strategy.args.ckpt_path + '/logs'
-            import os 
+            import os
             os.makedirs(log_file, exist_ok=True)
             log_file += '/sample.'
-            
+
             if log_file:
-                if is_eval: 
+                if is_eval:
                     log_file += f'eval_iter{self.eval_step}_{self.strategy.get_rank()}.jsonl'
-                else: 
+                else:
                     log_file += 'jsonl'
-                
+
                 print(f'===> [verbose] actionlogp reward done for batch @rank{self.strategy.get_rank()}, written to log', log_file)
-                
+
                 with open(log_file,'a') as f:
-                    
+
                     dump_info = dict()
                     for k, v in info.items():
                         if isinstance(v, torch.Tensor):
                             v = v.detach().cpu().numpy().tolist()
                         dump_info[k] = v
-                    
+
                     # print('debug', info['reward'])
                     dump_info['questions'] = questions
                     dump_info['solutions'] = solutions
                     gts = [self.q2gt.get(q, None) for q in dump_info['qids']]
-                    dump_info['gts'] = gts 
-                    
-                    num = len(dump_info['qids']) # 96 
+                    dump_info['gts'] = gts
+
+                    num = len(dump_info['qids']) # 96
                     # print('!!!! debug ', dump_info)
                     for i in range(num):
                         entry = dict()
                         for k in ['solutions', 'gts', 'round0_correctness', 'round1_correctness','validity', 'reward', 'round1_nwait', 'round0_nwait',  'qids', 'questions', 'num_actions','curiosity','penalty']: # error_info, usefmt, use_codes
-                            # if k=='sol': continue 
-                            if k not in dump_info: continue 
-                            
+                            # if k=='sol': continue
+                            if k not in dump_info: continue
+
                             if len(dump_info[k])!=num:
                                 raise Exception(f"dump-info key {k}: {len(dump_info[k])} should be {num}")
-                            
+
                             v = dump_info[k][i]
-                            
+
                             entry[k] = v
                         f.write(json.dumps(entry)+'\n')
-        
+
         del (
-            sequences, 
-             sequences_cpu, 
-             action_log_probs, 
-             attention_mask, 
-             attention_mask_cpu, 
-             visual_inputs, 
+            sequences,
+             sequences_cpu,
+             action_log_probs,
+             attention_mask,
+             attention_mask_cpu,
+             visual_inputs,
              visual_inputs_cpu
-        ) 
-              
+        )
+
         return experience
 
     def send_requests_to_vllms(self, rank, global_messages, llms, sampling_params):
@@ -1840,21 +1839,21 @@ class vllmAgentWrapper(BaseAgentWrapper):
             messages = global_messages[i * batch_size : (i + 1) * batch_size]
             prompts = self.data_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             prompts = self.data_processor.handle_placeholders(prompts)
-            
+
             images = [self.data_processor.get_images_from_messages(m) for m in messages]
             # print('!!!! debug image type', type(images[0][0]))
             vllm_inputs = [{
                         "prompt": p,
-                        "multi_modal_data":{"image": images}  
-                        
+                        "multi_modal_data":{"image": images}
+
             } for p, images in zip(prompts,images)]
-            
+
 
             refs.append(
                 llm.add_requests_vlm.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs)
             )
-        return refs 
-    
+        return refs
+
     def process_sequences(self, sequences: torch.Tensor, input_len, eos_token_id, pad_token_id):
         attention_mask = (sequences.ne(eos_token_id) & sequences.ne(pad_token_id)).to(dtype=torch.long)
         seq_length = attention_mask.size(1)
@@ -1882,26 +1881,26 @@ class vllmAgentWrapper(BaseAgentWrapper):
         action_mask[:, 0] = 1
 
         return sequences, attention_mask, action_mask
-    
+
     def _generate_vllm(self, global_prompts: List[str], use_response=False, skip_generation=False, **kwargs) -> List[Samples]:
-        
+
         # Sampling Parameters
         from vllm import SamplingParams
 
         # white image
         blank_image = Image.new(
-            'RGB', 
-            (56, 56), 
+            'RGB',
+            (56, 56),
             (255, 255, 255)
         )
 
         # size info
         raw_maxsize = 2000, zoom_maxsize = 1000, select_maxsize = 400,\
-        
+
         eval_minpixel = 256 , eval_maxpixel = 8000 #for tools, should be 8000
-        
-        image_maxtoken = 512 # int(maxpixel)//10//28//28 
-        
+
+        image_maxtoken = 512 # int(maxpixel)//10//28//28
+
         # comm info
         rank = dist.get_rank(), world_size = dist.get_world_size()
 
@@ -1923,8 +1922,8 @@ class vllmAgentWrapper(BaseAgentWrapper):
         # Sampling set
         if is_eval: #  and args.n_samples_per_prompt==1:
             temperature = 0.0 # zero is greedy
-            top_p = 1 
-            top_k = -1 
+            top_p = 1
+            top_k = -1
         else:
             temperature=getattr(args, "temperature", 0.85)
             top_p=kwargs.get("top_p", 1.0)
@@ -1932,33 +1931,33 @@ class vllmAgentWrapper(BaseAgentWrapper):
             if is_eval:
                 temperature = getattr(args, "val_temperature", 0.6)
                 top_p = 0.95
-  
-        
+
+
         print(f"!!!! [warning] forcifully using maxtoken={maxtoken} for vllm")
         data_version = getattr(args, "data_version", None)
         do_wait = data_version == "append_wait"
-        force_wait = "force_append_wait" in data_version 
+        force_wait = "force_append_wait" in data_version
         force_eval_wait = "force_append_wait_eval" == data_version
         force_global_wait = data_version == "force_append_wait_all"
-        
+
         # print(f'!!!! debug replace_wait={do_wait} or {force_wait}')
         do_vlm = getattr(args, 'train_vlm', False)
         multires = getattr(args, "multires", "False")=="True"
         stop_tokens = ['<|im_end|>','<|eot_id|>','<|endoftext|>'] # ,'</tool_call>'
-        
+
         print(f'===> [verbose] remoteEMaker _generate_vllm() handling whole batch of {len(global_prompts)} queries')
-        
+
         skip_generation = use_response
-        
+
         if use_response:
 
             global_outputs_offline = []
             global_inputs_offline = []
             for p in global_prompts:
-                chat = json.loads(p) 
-                
+                chat = json.loads(p)
+
                 ###### will be a chat list like this
-                # chat = [dict(role='user', 
+                # chat = [dict(role='user',
                 #          content=[dict(type='image', image=image),
                 #                   dict(type='text', text=q)
                 # ])]
@@ -1966,20 +1965,19 @@ class vllmAgentWrapper(BaseAgentWrapper):
                 # for entry in chat:
                 #     if entry['role']=='user': break
                 qid = chat[-1]['qid']
-                # rq = regularize_text(entry['content'][-1]['text']) 
-                
+                # rq = regularize_text(entry['content'][-1]['text'])
+
                 responses = self.q2r[qid][:args.n_samples_per_prompt]
-                # import pdb; pdb.set_trace()
                 cleaned_chat = []
                 for entry in chat:
                     if 'content' in entry:
                         cleaned_chat.append(entry)
-                inputs = self.data_processor(json.dumps(cleaned_chat), self.prompt_max_len, device="cpu")['input_ids'] # output will be a list 
-                
+                inputs = self.data_processor(json.dumps(cleaned_chat), self.prompt_max_len, device="cpu")['input_ids'] # output will be a list
+
                 # rlist = [response+self.tokenizer.eos_token for response in responses]
                 for response in responses:
                     out = response+self.tokenizer.eos_token
-                    
+
                     out_tokens = self.data_processor.processor(
                         text=out,
                         padding=False,
@@ -1987,7 +1985,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
                         add_special_tokens=False,
                         truncation=True,
                         return_tensors='np',
-                    )['input_ids'] # output will be a list 
+                    )['input_ids'] # output will be a list
                     global_outputs_offline.extend(out_tokens)
                     global_inputs_offline.extend(inputs.cpu().numpy().tolist()*len(out_tokens))
                     # print('!!!! [debug]', global_inputs_offline[-1])
@@ -1999,51 +1997,51 @@ class vllmAgentWrapper(BaseAgentWrapper):
         global_images = dict()
         global_raw_images = dict()
         nsample = 1 if is_eval else args.n_samples_per_prompt
-        
+
         potential_qids = []
         qids_expanded = []
         maxtokens = []
-        
-        for prompt in global_prompts: 
-            prompt = json.loads(prompt)
-            if 'qid' in prompt[-1]: 
 
-                # we need to drop the qid entry 
+        for prompt in global_prompts:
+            prompt = json.loads(prompt)
+            if 'qid' in prompt[-1]:
+
+                # we need to drop the qid entry
                 new_prompt = json.dumps(prompt[:-1])
                 qid = prompt[-1]['qid']
-                potential_qids.append(qid) 
+                potential_qids.append(qid)
                 qids_expanded.extend([qid]*nsample)
                 mtoken_list = [image_maxtoken for _ in range(nsample)] if (is_eval or not multires) \
                     else [np.random.choice([128,256,512],size=1) for _ in range(nsample)]
                 maxtokens.extend(mtoken_list)
-            else: 
+            else:
                 new_prompt = prompt
-    
+
             global_messages.extend([new_prompt] * nsample)
             global_raw_messages.extend([prompt] * nsample)
-            
-        
+
+
         if is_eval or not skip_generation:
-            
+
             sampling_params = SamplingParams(
-                temperature=temperature, 
+                temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
                 max_tokens=maxtoken,
                 min_tokens=kwargs.get("min_new_tokens", 1),
                 skip_special_tokens=kwargs.get("skip_special_tokens", False),
-                include_stop_str_in_output=False, # from True to False. 
+                include_stop_str_in_output=False, # from True to False.
                 stop=stop_tokens,
             )
 
             print(f'!!!! [vllm] is_eval={is_eval}, sampling args', sampling_params)
-            
+
             refs = []
-    
+
             batch_size = (len(global_messages) + len(llms) - 1) // len(llms)
-            
+
             print(f'===> [verbose] to handle {len(global_messages)} qas, bsz={batch_size} qas for {len(llms)} vllm engine.')
-            
+
             global_vllm_inputs = dict()
             global_uids = []
             global_video_flags = []
@@ -2055,32 +2053,32 @@ class vllmAgentWrapper(BaseAgentWrapper):
                 global_uids.extend(batch_uids)
                 old_format_messages = messages
                 prompts, conversations = get_prompt_from_messages(
-                    old_format_messages, 
-                    self.prompt_maker, 
-                    self.tools, 
+                    old_format_messages,
+                    self.prompt_maker,
+                    self.tools,
                     self.data_processor.processor
                 )
-                
+
                 (conversations, images, has_video) = \
                     self.data_processor.obtain_conv_images_from_conversations(
-                        conversations, 
-                        batch_min_pixels=[(eval_minpixel if is_eval else 4)*28*28  for x in batch_mtokens], #[x*28*28 for x in batch_mtokens], 
+                        conversations,
+                        batch_min_pixels=[(eval_minpixel if is_eval else 4)*28*28  for x in batch_mtokens], #[x*28*28 for x in batch_mtokens],
                         batch_max_pixels=[(eval_maxpixel if is_eval else raw_maxsize)*28*28 for x in batch_mtokens],) #[x*10*28*28 for x in batch_mtokens])
-                
+
                 global_video_flags.extend(has_video)
-                
+
                 for cur_uid, conv, imagelist, video_flag in zip(batch_uids, conversations, images, has_video):
-                    global_conversations[cur_uid] = conv 
-                    
+                    global_conversations[cur_uid] = conv
+
                     if video_flag:
                         global_images[cur_uid] = [imagelist]
                         rawimagelist = [imagelist]
-                    else: 
+                    else:
                         global_images[cur_uid] = imagelist
                         rawimagelist = imagelist
-                    
+
                     global_raw_images[cur_uid] = rawimagelist
-                
+
                 vllm_inputs = dict()
                 for pp, images, cur_uid, video_flag in zip(prompts, images, batch_uids, has_video):
                     tmp = {
@@ -2091,13 +2089,13 @@ class vllmAgentWrapper(BaseAgentWrapper):
                         raise Exception("images cannot be None")
 
                     vllm_inputs[cur_uid] = tmp
-                    
+
                 global_vllm_inputs.update(vllm_inputs)
 
                 refs.append(
                     llm.add_requests_vlm(rank, sampling_params=sampling_params, vllm_vision_input=[vllm_inputs[cur_uid] for cur_uid in batch_uids])
                 )
-            
+
             print(f'===> [verbose] {len(global_messages)} QA request submitted to {len(llms)} vllm engine.')
 
             ray.get(refs)
@@ -2109,23 +2107,23 @@ class vllmAgentWrapper(BaseAgentWrapper):
                 global_output_refs.append(llm.get_responses.remote(rank))
             global_outputs = sum(ray.get(global_output_refs), [])
         print(f"===> [verbose] decode and evaluate the initial round of responses")
-        
+
         idx_to_uid = global_uids
         global_inputs_ids = [list(old_out.prompt_token_ids) for old_out in global_outputs]
-        global_outputs_ids = [list(old_out.outputs[0].token_ids) for old_out in global_outputs] 
+        global_outputs_ids = [list(old_out.outputs[0].token_ids) for old_out in global_outputs]
         solutions_round_0 = self.tokenizer.batch_decode(global_outputs_ids, skip_special_tokens=False)
         questions = self.tokenizer.batch_decode(global_inputs_ids, skip_special_tokens=False)
         questions_cleaned = [x.replace("<|image_pad|>","").replace("<|video_pad|>","") for x in questions]
         global_qa_texts = [x+y for x,y in zip(questions_cleaned, solutions_round_0)]
         num_toolcalls = [0] * len(global_qa_texts)
         num_toolfails = [0] * len(global_qa_texts)
-        
+
         # add terminate calculation
         tool_end = "</tool_call>"
         maxtool = getattr(args, "maxturn", 2)
 
         print(f"===> [verbose] doing multiturn of {maxtool} turns")
-        
+
         niter = 0
         maxtool = maxtool - 2
 
@@ -2134,60 +2132,60 @@ class vllmAgentWrapper(BaseAgentWrapper):
         final_error_flags = [False for _ in range(len(qids_expanded))]
         do_dump = (getattr(args, "training_mode", "train") in {'eval_only','train'}) and is_eval
         temp_error_flags = [False for _ in range(len(qids_expanded))]
-        
-        while True: 
+
+        while True:
             request_indexlist = []
             request_vllm_inputs = []
             request_qids = []
-            
-            
+
+
             print(f"========= niter {niter} =========")
-            
+
             for out_idx, (cur_qid, out, qatext, skip_flag) in enumerate(zip( qids_expanded, global_outputs, global_qa_texts, global_flags)):
-                
-                if skip_flag: 
-                    continue 
+
+                if skip_flag:
+                    continue
 
                 cur_uid = idx_to_uid[out_idx]
-                
+
                 tfolder = self.strategy.args.ckpt_path + f'/logs/dumps_iter{self.eval_step}/{cur_qid}'
 
-                if do_dump: 
+                if do_dump:
                     os.makedirs(tfolder, exist_ok=True)
-                
+
                 targetpath = f"{tfolder}/iter{niter}.jpg"
-                
+
                 response = solutions_round_0[out_idx].replace("<|im_end|>","")
-                
+
                 msg_this = [
-                    dict(role='assistant', 
+                    dict(role='assistant',
                     content=[dict(type='text', text=response),])
                 ]
 
                 last_string = response[- len(tool_end) - 10 : ] if len(response) > len(tool_end) + 10 else response
-                
-                # check whether tool trigger in out_ids 
+
+                # check whether tool trigger in out_ids
                 require_tool = last_string.endswith(tool_end)
                 cur_tokens_in = len(global_outputs[out_idx].prompt_token_ids)
                 cur_tokens_out = len(global_outputs[out_idx].outputs[0].token_ids)
                 cur_tokens = cur_tokens_in + cur_tokens_out
-                force_terminate = ( 
+                force_terminate = (
                     num_toolcalls[out_idx] > 3 or \
                     len(global_images[cur_uid]) > max_imagenum or cur_tokens > 12 * 1024 - 200
                 )
 
                 # either it ends with im_end, either it exceeds max length
-                finish_flag = not require_tool or force_terminate  
+                finish_flag = not require_tool or force_terminate
                 global_flags[out_idx] = finish_flag
                 final_error_flags[out_idx] = finish_flag and temp_error_flags[out_idx]
-                
+
                 num_toolcalls[out_idx] += 1 if require_tool else 0
                 num_toolfails[out_idx] += 1 if force_terminate else 0
-                
+
                 if out_idx == 0:
                     print(f"++++ [debug] cur_qid={cur_qid}, iter={niter}, A={msg_this}, require_tool={require_tool}")
-                    
-                if finish_flag: 
+
+                if finish_flag:
                     global_conversations[cur_uid] = global_conversations[cur_uid] + msg_this
                     if do_dump:
                         json.dump(
@@ -2195,62 +2193,62 @@ class vllmAgentWrapper(BaseAgentWrapper):
                                 global_conversations[cur_uid],
                                 global_vllm_inputs[cur_uid]['prompt'],
                                 str(global_images[cur_uid])
-                            ], 
+                            ],
                             open(f"{tfolder}/conv.json",'w')
                         )
-                    continue 
-                
+                    continue
+
                 imagelist = global_images[cur_uid]
                 rawimagelist = global_raw_images[cur_uid]
                 video_flag = global_video_flags[out_idx]
-                error_flag = False 
+                error_flag = False
                 temp_error_flags[out_idx] = False
-                
+
                 try:
-                    tool_params = parse_last_tool(qatext) 
+                    tool_params = parse_last_tool(qatext)
                     tool_name = tool_params['name']
                     tool_args = tool_params['arguments']
 
                     # if tool_name in {'crop_image_normalized','crop_image'}:
                     raw_result = execute_tool(imagelist, rawimagelist, tool_args, tool_name, is_video=video_flag, function=self.operations[tool_name].call)
-                    if tool_name=='select_frames': 
+                    if tool_name=='select_frames':
                         if not video_flag:
                             selected_frames = []
                             info = "Execution error:\nYou attempted to select frames from an **image**, but this operation is only desgined for analyzing videos. Think again.\n"
-                        selected_frames, info = raw_result 
-                        if not isinstance(info, str): # info is the replacement 
+                        selected_frames, info = raw_result
+                        if not isinstance(info, str): # info is the replacement
                             # assert "" in msg_this[-1]['content'][0]['text']
                             oldtext = msg_this[-1]['content'][0]['text']
                             newtext = oldtext.replace(str([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), str(info))
-                            msg_this[-1]['content'][0]['text'] = newtext 
-                        
+                            msg_this[-1]['content'][0]['text'] = newtext
+
                         if is_eval:
                             added = selected_frames
                         else:
                             added = [resize_cropped(frame, min_pixels=(256 if is_eval else 4)*28*28, max_pixels=(5120 if is_eval else select_maxsize)*28*28) for frame in selected_frames]
-                        
+
                         if len(selected_frames)==0:
                             msg_this.append(
                                 dict(
-                                    role='user', 
+                                    role='user',
                                     content=[
                                         dict(type='text', text=f"\n{info}"),
-                                    ] 
+                                    ]
                                 )
                             )
-                        else:    
+                        else:
                             msg_this.append(
                             dict(
-                                role='user', 
+                                role='user',
                                 content=[
                                     dict(type='text', text="\nHere are the selected frames (Frame Size: {}x{}, Numbered {} to {}):".format(added[0].size[0], added[0].size[1], len(imagelist), len(selected_frames)+len(imagelist)-1)),
-                                    ] + 
+                                    ] +
                                         [
                                     dict(type='image', image=targetpath) for _ in range(len(selected_frames))
                                     ]
-                            )        
+                            )
                         )
-                        
+
                     else:
                         mtoken = maxtokens[out_idx]
 
@@ -2258,7 +2256,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
                         if do_dump:
                             proc_image.save(targetpath)
                             print('dumped', targetpath)
-                        
+
                         added = [proc_image]
 
                         msg_this.append(
@@ -2267,30 +2265,28 @@ class vllmAgentWrapper(BaseAgentWrapper):
                                 dict(type='image', image=targetpath)
                             ])
                         )
-                    
+
                 except Exception as e:
                     print('!!!!!!! warning')
                     print(e)
                     # print('tool args', tool_args, tool_name)
-                    # breakpoint()
                     error_info = str(e)
                     msg_this.append(
                         dict(role='user', content=[
                             dict(type='text', text=f"\nExecution error:\n{error_info}\n")
                         ])
                     )
-                    # breakpoint()
                     num_toolfails[out_idx] += 1
-                    error_flag = True 
+                    error_flag = True
                     temp_error_flags[out_idx] = True
                     added = []
-                    
+
                 new_images = global_images[cur_uid] + added
 
                 # the returned is exceeding the max image num
                 if len(new_images) > max_imagenum:
                     global_flags[out_idx] = True
-                    if error_flag: 
+                    if error_flag:
                         final_error_flags[out_idx] = True
                     continue
 
@@ -2298,45 +2294,45 @@ class vllmAgentWrapper(BaseAgentWrapper):
                 global_conversations[cur_uid] = global_conversations[cur_uid] + tconv[0]
                 global_images[cur_uid] = global_images[cur_uid] + added
                 prompts = self.data_processor.processor.apply_chat_template([global_conversations[cur_uid]], tokenize=False, add_generation_prompt=True)[0]
-                
+
                 global_vllm_inputs[cur_uid]['prompt'] = prompts
-                
+
                 if video_flag:
                     global_vllm_inputs[cur_uid]["multi_modal_data"]['image'] = global_images[cur_uid][1:]
                 else:
                     global_vllm_inputs[cur_uid]["multi_modal_data"]['image'] = global_images[cur_uid]
-                
+
                 request_vllm_inputs.append(global_vllm_inputs[cur_uid])
                 request_qids.append(cur_qid)
                 request_indexlist.append(out_idx)
-                
+
 
             if len(request_vllm_inputs)==0:
                 print(f"===> [verbose] all queries already finish at iter {niter}")
-                break 
+                break
 
             batch_size = (len(request_vllm_inputs) + len(llms) - 1) // len(llms)
             print(f'===> [vllm] tool-call@iter{niter} requests {len(request_vllm_inputs)}/{len(global_flags)} messages, bsz_each={batch_size}=nqa, numllm={len(llms)}')
-            
+
             requests = []
-            
+
             for i, llm in enumerate(llms):
                 vllm_inputs = request_vllm_inputs[i * batch_size : (i + 1) * batch_size] # dict(prompt, multimodal_data)
                 tmp_params = copy(sampling_params)
                 if not is_eval:
-                    tmp_params.temperature = 0.9 
+                    tmp_params.temperature = 0.9
                 requests.append(
                     llm.add_requests_vlm(rank, sampling_params=tmp_params, vllm_vision_input=vllm_inputs)
                 )
             print(f"===> [verbose] submit rethinking requests {len(request_vllm_inputs)}")
             ray.get(requests)
             niter += 1
-            
+
             new_output_refs = []
             for i, llm in enumerate(llms):
                 new_output_refs.append(llm.get_responses.remote(rank))
             new_outputs = sum(ray.get(new_output_refs), [])
-            
+
             print(f"===> [verbose] decode the new tool-executed responses ")
             new_tokens_in = [list(out.prompt_token_ids) for out in new_outputs]
             new_tokens_out = [list(out.outputs[0].token_ids) for out in new_outputs]
@@ -2345,7 +2341,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
             # print(f"peek iter {niter}", new_texts_in[0])
             new_texts_in = [x.replace("<|image_pad|>","").replace("<|video_pad|>","") for x in new_texts_in]
             new_texts = [x+y for x,y in zip(new_texts_in, new_texts_out)]
-            
+
             new_idx = 0
 
             for new_idx, old_idx in enumerate(request_indexlist):
@@ -2354,10 +2350,10 @@ class vllmAgentWrapper(BaseAgentWrapper):
 
                 global_qa_texts[old_idx] = new_texts[new_idx]
                 solutions_round_0[old_idx] = new_texts_out[new_idx]
-            
-        # peek the responses 
+
+        # peek the responses
         dist.barrier()
-        
+
         rets_round1 = self.convenient_get_batch_rewards_from_queries(global_qa_texts, qids_expanded)
         difficulty_labels = []
         total = 0
@@ -2374,12 +2370,12 @@ class vllmAgentWrapper(BaseAgentWrapper):
             group_score = np.mean(correctness)
             ntoolcalls = num_toolcalls[idx:idx+nsample]
             videoflags = global_video_flags[idx:idx+nsample]
-            
-            has_correct_without_tool = False 
+
+            has_correct_without_tool = False
             for mres, ncall in zip(correctness, ntoolcalls):
-                if mres>0.5 and ncall<0.1: 
-                    has_correct_without_tool = True 
-                    break 
+                if mres>0.5 and ncall<0.1:
+                    has_correct_without_tool = True
+                    break
             rapr = np.mean([ncall>0. for ncall in ntoolcalls])
             efficiency_labels.extend([float(has_correct_without_tool)]*nsample)
             this_rewards = []
@@ -2390,14 +2386,14 @@ class vllmAgentWrapper(BaseAgentWrapper):
                 this_r = float(mres)
                 final_is_error_vo = final_error_flags[iidx]
                 if this_r > 0.5 and final_is_error_vo: # there is a failure for visual operations but the model does not fix it
-                    this_r = 0.0 
+                    this_r = 0.0
                 if isvideo and ncall>0.1: # for video
                     curiosity = max(0.3 - rapr, 0.0) / 1.5
                     curiosity = curiosity / rapr * 0.25 # the maximum curiosity is 0.25
                     penalty = - 0.05*(ncall-1)
                     # bonus = max(0.0, discount*(curiosity + penalty)) # curiosity; failure penalty
                     bonus = discount*(curiosity + penalty)
-                    this_r += bonus 
+                    this_r += bonus
                 elif ncall>0.1: # for image only when it's correct?
                     curiosity = max(0.3 - rapr, 0.0) / 2.0
                     curiosity = curiosity / rapr * 0.25 # the maximum curiosity is 0.25
@@ -2420,26 +2416,26 @@ class vllmAgentWrapper(BaseAgentWrapper):
             sum_rewards = sum(this_rewards)
             mean_rewards = np.mean(this_rewards)
             is_uniform = False
-            
+
             if np.mean([abs(x-mean_rewards) for x in this_rewards])<0.01:
                 is_uniform = True
-                      
-            shaped_rewards.extend(this_rewards)  
+
+            shaped_rewards.extend(this_rewards)
             curiosity_bonus.extend(this_cur)
             penalty_bonus.extend(this_pen)
             uniformity.extend([float(is_uniform)]*nsample)
             if group_score<1./8.:
                 difficulty_labels.extend([0]*nsample)
-            elif group_score<3./8.: 
+            elif group_score<3./8.:
                 difficulty_labels.extend([1]*nsample)
-            elif group_score<6./8.: 
+            elif group_score<6./8.:
                 difficulty_labels.extend([2]*nsample)
-            elif group_score<1.: 
+            elif group_score<1.:
                 difficulty_labels.extend([3]*nsample)
-            else: 
+            else:
                 difficulty_labels.extend([4]*nsample)
             total += 1
-    
+
         match_results = [x[-1] for x in rets_round1]
         print(f"===> [verbose] multiturn responses toolrate={np.mean(num_toolcalls)}, acc={np.mean(match_results)}, match_results={match_results}")
         samples_list = []
@@ -2460,7 +2456,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
             batch_toolfails = num_toolfails[i : i + self.strategy.args.micro_rollout_batch_size]
             batch_correctness = rets_round1[i : i + self.strategy.args.micro_rollout_batch_size]
             batch_q = questions_cleaned[i : i + self.strategy.args.micro_rollout_batch_size]
-            
+
             batch_flags = global_video_flags[i : i + self.strategy.args.micro_rollout_batch_size]
             batch_qids = qids_expanded[i : i + self.strategy.args.micro_rollout_batch_size]
             batch_cur_uids = global_uids[i : i + self.strategy.args.micro_rollout_batch_size]
@@ -2470,29 +2466,29 @@ class vllmAgentWrapper(BaseAgentWrapper):
             diff_labels = difficulty_labels[i : i + self.strategy.args.micro_rollout_batch_size]
             eff_labels = efficiency_labels[i : i + self.strategy.args.micro_rollout_batch_size]
             max_input_len, max_output_len = 0, 0
-            
+
             batch_texts = self.data_processor.processor.apply_chat_template(
                     batch_conv, tokenize=False, add_generation_prompt=False
             )
             batch_texts = [x.strip() for x in batch_texts]
             # _, batch_images = self.data_processor.obtain_conv_images_from_conversations(batch_conv)
-            
+
             ###################
             assert args.micro_rollout_batch_size==1 or is_eval, "mix of video and image only support mrbsz==1"
             video_flag = batch_flags[0]
-            padded = False 
+            padded = False
             if video_flag:
                 this_visual = batch_images[0]
-                video = this_visual[0] # list of images 
+                video = this_visual[0] # list of images
                 imagelist = this_visual[1:] # list of images
                 if len(imagelist)==0:
                     this_imagelist = [blank_image]
                     new_text = batch_texts[0]+"<|vision_start|><|image_pad|><|vision_end|>"
-                    padded = True 
+                    padded = True
                 else:
                     this_imagelist = imagelist
                     new_text = batch_texts[0]
-                
+
                 visual_inputs = self.data_processor.processor(
                     text=[new_text],
                     images=[this_imagelist],
@@ -2506,8 +2502,8 @@ class vllmAgentWrapper(BaseAgentWrapper):
             else:
                 video = [blank_image]
                 new_text = batch_texts[0]+"<|vision_start|><|video_pad|><|vision_end|>"
-                padded = True 
-                
+                padded = True
+
                 visual_inputs = self.data_processor.processor(
                     text=[new_text],
                     images=batch_images,
@@ -2518,16 +2514,14 @@ class vllmAgentWrapper(BaseAgentWrapper):
                     truncation=False,
                     return_tensors="pt",
                 )
-                # breakpoint()
-            
-            
+
+
             seqlist = visual_inputs['input_ids']
             visual_inputs.pop('input_ids')
             visual_inputs.pop('attention_mask')
-            
+
             expected_imagepad_list = [(gg[-1]*gg[-2]//4).item() for gg in visual_inputs.get('image_grid_thw',[])]
             expected_vidpad_list = [(gg[0]*gg[1]*gg[2]//4).item() for gg in visual_inputs.get('video_grid_thw',[])]
-            # breakpoint()
             batch_segment_lengths = []
             q_tokens, a_tokens = [],[]
             for seq, single_conv in zip(seqlist,batch_conv):
@@ -2543,22 +2537,22 @@ class vllmAgentWrapper(BaseAgentWrapper):
                         segment = []
                     else:
                         segment.append(entry)
-                
+
                 first_round = True
-                
-                for q,a in segments: 
-                    
+
+                for q,a in segments:
+
                     qtext = self.data_processor.processor.apply_chat_template(
-                            q, tokenize=False, add_generation_prompt=True 
+                            q, tokenize=False, add_generation_prompt=True
                     )
-                    
+
                     if not first_round:
                         start = "<|im_start|>user"
                         qtext = start+qtext.split(start)[-1]
                         mlist.append(qtext.replace("<|image_pad|>","").replace("<|video_pad|>",""))
-                        
-                    first_round = False 
-                    
+
+                    first_round = False
+
                     # note: in the second round, a system may be added, which is incorrect
                     has_image = 0
                     has_video = 0
@@ -2569,18 +2563,18 @@ class vllmAgentWrapper(BaseAgentWrapper):
                                     has_image +=1
                                 elif 'video' in item:
                                     has_video += 1
-                                    
-                            # if has_image>0: break 
-                    
+
+                            # if has_image>0: break
+
                     atext = a['content'][0]['text']
                     mlist.append(atext)
                     info.append(([qtext,  atext+"<|im_end|>"], has_image, has_video))
                     tmp_texts.extend(info[-1][0])
-                
+
                 batch_s.append("".join(mlist))
                 encodings = self.data_processor.processor.tokenizer(tmp_texts, add_special_tokens=False)
                 lengths = [len(encoding) for encoding in encodings["input_ids"]]
-                
+
                 assert len(info)==len(lengths)//2, f"qa length, {len(info)} vs {len(lengths)}"
                 # image_idx = 0
                 segment_lengths = []
@@ -2596,51 +2590,50 @@ class vllmAgentWrapper(BaseAgentWrapper):
                     has_image,has_video = minf[-2:]
                     npad = 0
                     if has_image>0: # image
-                        npad = sum(expected_imagepad_list[imagestart:imagestart+has_image]) 
+                        npad = sum(expected_imagepad_list[imagestart:imagestart+has_image])
                         imagestart += has_image
                         qlen = qlen - has_image + npad # there is extra image_pad tokens
-                        
+
                     if has_video>0:
                         # expected_vidpad_list[0]
-                        npad = expected_vidpad_list[0] # sum(expected_imagepad_list[imagestart:imagestart+has_image]) 
+                        npad = expected_vidpad_list[0] # sum(expected_imagepad_list[imagestart:imagestart+has_image])
                         vidstart += has_video
-                        qlen = qlen - has_video + npad 
+                        qlen = qlen - has_video + npad
                     segment_lengths.extend([qlen, alen]) # for selected frames, there will be a list of frames returned
                     q_ids, a_ids = seq[pos:pos+qlen], seq[pos+qlen:pos+qlen+alen]
                     if nmax-1==niter:
-                        a_ids = seq[pos+qlen:] # sometimes the answer is padded with image 
-                        
+                        a_ids = seq[pos+qlen:] # sometimes the answer is padded with image
+
                     if idx>0:
                         full_a.extend([q_ids, a_ids])
-                        
+
                     else:
                         initial_q = q_ids
                         full_a = [a_ids]
 
                     pos += qlen + alen
                     niter += 1
-                    
+
                 batch_segment_lengths.append(segment_lengths)
-                
+
                 q_tokens.append(initial_q)
                 a_tokens.append(torch.cat(full_a))
-                
+
                 # pos = 0
                 # for ntok in segment_lengths:
                 #     print(f"{self.data_processor.processor.decode(seq[pos:pos+ntok])}")
                 #     print('------')
                 #     pos += ntok
-                # breakpoint()
                 max_input_len = max(max_input_len, len(q_tokens[-1]))
                 max_output_len = max(max_output_len, len(a_tokens[-1]))
                 # npad = seq.eq(pad_token_id).to(float).sum().item()
-                
-            ######## left and right padding 
+
+            ######## left and right padding
             sequences = torch.ones((len(q_tokens), max_input_len+max_output_len), dtype=torch.long) * pad_token_id
             for idx, (qtoken, atoken) in enumerate(zip(q_tokens, a_tokens)):
-                sequences[idx][max_input_len-len(qtoken):max_input_len] = qtoken 
-                sequences[idx][max_input_len:max_input_len+len(atoken)] = atoken 
-                
+                sequences[idx][max_input_len-len(qtoken):max_input_len] = qtoken
+                sequences[idx][max_input_len:max_input_len+len(atoken)] = atoken
+
             #################
             # sequences, attention_mask, action_mask = self.actor.process_sequences(
             #     sequences, max_input_len, eos_token_id, pad_token_id
@@ -2651,20 +2644,20 @@ class vllmAgentWrapper(BaseAgentWrapper):
             ntokens_image = [(x==imagepad).to(float).sum().item() for x in sequences]
             ntokens_vid = [(x==videopad).to(float).sum().item() for x in sequences]
             ntokens = [x+y for x,y in zip(ntokens_image, ntokens_vid)]
-            
+
             print("should sum to the same", expected_vidpad_list+expected_imagepad_list, sum(expected_vidpad_list+expected_imagepad_list), ntokens)
-            
+
             attention_mask = attention_mask.to(device)
             # action_mask = sequences.ne(eos_token_id) & sequences.ne(pad_token_id)
             action_mask = create_action_mask_up_to_last_eos(sequences, eos_token_id, pad_token_id)
-            
+
             for idx, slength in enumerate(batch_segment_lengths):
                 pos = 0
                 for iidx, slen in enumerate(slength):
                     pos += slen
-                    if iidx%2==0: 
+                    if iidx%2==0:
                         action_mask[idx][pos-slen:pos] = False
-            
+
             action_mask = action_mask[:, max_input_len-1:-1] # this is to align with action log probs
             action_mask = action_mask.to(device)
             na_each = [x.sum().item() for x in action_mask]
@@ -2675,7 +2668,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
                     attention_mask=attention_mask,
                     action_mask=action_mask,
                     num_actions=max_output_len,
-                    na_each=na_each, 
+                    na_each=na_each,
                     packed_seq_lens=None,
                     response_length=action_mask.float().sum(dim=-1),
                     total_length=attention_mask.float().sum(dim=-1),
@@ -2700,7 +2693,7 @@ class vllmAgentWrapper(BaseAgentWrapper):
                     penalty_bonus=penalty_bonus[i : i + self.strategy.args.micro_rollout_batch_size],
                 )
             )
-            
+
         return samples_list
 
     def flush(self):
@@ -2727,7 +2720,7 @@ if __name__ == "__main__":
     # # print(messages[0])
     # messages = [prompt_maker.preprocess_fncglobal_messages(
     #                 messages=msg,
-    #                 functions=tools, 
+    #                 functions=tools,
     #                 lang=None
     #             ) for msg in messages]
     # # print('=========')

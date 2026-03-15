@@ -68,7 +68,7 @@ class ActorPPOTrainer(PPOTrainer):
             self.reward_fn,
             vllm_engines=self.vllm_engines,
             packing_samples=self.strategy.args.packing_samples,
-            gt_path=self.gt_path, 
+            gt_path=self.gt_path,
             modelfamily=self.modelfamily
         )
 
@@ -280,16 +280,16 @@ class ActorPPOTrainer(PPOTrainer):
             max_num = args.max_ckpt_num
             if self.strategy.is_rank_0():
                 while True:
-                    save_dir = args.ckpt_path 
+                    save_dir = args.ckpt_path
                     subdirs = sorted(
                         [
                             (os.path.join(save_dir, d), os.path.getmtime(os.path.join(save_dir, d)))
                             for d in os.listdir(save_dir)
-                            if d.endswith('hf') and os.path.isdir(os.path.join(save_dir, d)) 
+                            if d.endswith('hf') and os.path.isdir(os.path.join(save_dir, d))
                         ],
                         key=lambda x: x[1],
                     ) # only take folders that ends with hf
-                    
+
                     if len(subdirs) >= max_num: # or total_size > MAX_SIZE:
                         oldest_dir = subdirs[0][0]
                         if os.path.exists(oldest_dir):
@@ -301,9 +301,9 @@ class ActorPPOTrainer(PPOTrainer):
         if not self.disable_ds_ckpt:
             if self.critic_train_remote:
                 ray.get(ref)
-                
+
         return save_path
-        
+
 
 
 @ray.remote(num_gpus=1)
@@ -391,7 +391,7 @@ class ActorModelRayActor(BasePPORole):
         actor_scheduler = get_scheduler(
             "cosine_with_min_lr",
             actor_optim,
-            num_warmup_steps=warmup_steps, 
+            num_warmup_steps=warmup_steps,
             num_training_steps=max_steps,
             scheduler_specific_kwargs={"min_lr": args.actor_learning_rate * 0.5},
         )
@@ -438,14 +438,14 @@ class ActorModelRayActor(BasePPORole):
         prompts_data = prompts_data.select(range(min(args.max_samples, len(prompts_data))))
         print('!!!!! prompts', len(prompts_data), args.prompt_data)
         print(prompts_data)
-        
+
         self.prompts_dataset = PromptDataset(
             prompts_data, self.tokenizer, strategy, input_template=args.input_template,
             processor=self.processor
         )
         eval_dp = getattr(args, "eval_data", None)
         self.eval_data = None
-        if eval_dp: 
+        if eval_dp:
             eval_data = blending_datasets(
                 eval_dp,
                 args.prompt_data_probs,
@@ -455,13 +455,13 @@ class ActorModelRayActor(BasePPORole):
                 return_eval=False,
                 train_split=args.prompt_split,
             )
-            
+
             self.eval_data = PromptDataset(
                 eval_data, self.tokenizer, strategy, input_template=args.input_template, is_eval=True, processor=self.processor
             )
             print('!!!!! eval data', len(eval_data), eval_dp)
             print(self.eval_data)
-        
+
         print(f'!!!! RL loader batchsize (queries) = (buffersize) {args.rollout_batch_size} / (worldsize) {strategy.world_size}')
         self.prompts_dataloader = strategy.setup_dataloader(
             self.prompts_dataset, args.rollout_batch_size // strategy.world_size, True, shuffle=True,
@@ -544,7 +544,7 @@ class ActorModelRayActor(BasePPORole):
             gradient_checkpointing=args.gradient_checkpointing,
             critic_train_remote=critic_train_remote,
             tokenizer=self.tokenizer,
-            processor=self.processor, 
+            processor=self.processor,
             prompt_max_len=args.prompt_max_len,
             value_clip=args.value_clip,
             eps_clip=args.eps_clip,
@@ -585,7 +585,7 @@ class ActorModelRayActor(BasePPORole):
         )
 
     def save_model(self):
-        pass 
+        pass
         # args = self.strategy.args
 
         # # save model checkpoint after fitting on only rank0

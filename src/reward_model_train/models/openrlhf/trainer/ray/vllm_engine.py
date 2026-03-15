@@ -120,7 +120,7 @@ class LLMRayActor:
 
             self.actor_counter = 0
             self.requests = {}
-            
+
     def add_requests_vlm_mix(self, actor_rank, *, sampling_params, vllm_vision_input):
         """
         Save the requests from actors and generate responses when all actors have sent their requests
@@ -136,19 +136,19 @@ class LLMRayActor:
             self.responses = {}
             for actor_rank, request in self.requests.items():
                 vreq, treq = request
-                if vreq: 
+                if vreq:
                     vrall.extend(vreq)
                     vrsrc.extend([actor_rank] * len(vreq))
                     # vresponses = self.llm.generate(vreq, sampling_params=sampling_params)
                     # print('!!!! debug vr', type(vresponses))
                 # else:
                 #     vresponses = []
-                if treq: 
+                if treq:
                     trall.extend(treq)
                     trsrc.extend([actor_rank] * len(treq))
                     # tresponses = self.llm.generate(treq, sampling_params=sampling_params)
                     # print('!!!! debug tr', type(tresponses))
-                   
+
             vresponses = self.llm.generate(vrall, sampling_params=sampling_params)
             tresponses = self.llm.generate(sampling_params=sampling_params, prompt_token_ids=trall)
             for actor_rank, request in self.requests.items():
@@ -158,7 +158,7 @@ class LLMRayActor:
             for rank, rsp in zip(trsrc, tresponses):
                 self.responses[rank].append(rsp)
             print('debug inside vllm engine')
-                
+
             self.actor_counter = 0
             self.requests = {}
 

@@ -31,7 +31,6 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.utils.data import DataLoader, Sampler
 from transformers import (
     AutoModelForCausalLM,
-    AutoModelForVision2Seq,
     AutoModelForSequenceClassification,
     Qwen2_5_VLForConditionalGeneration,
     Qwen2VLProcessor,
@@ -43,7 +42,6 @@ from transformers import (
     Trainer,
     TrainerCallback,
     is_wandb_available,
-    
 )
 
 
@@ -643,8 +641,7 @@ class GRPOTrainer_agent_qwen(Trainer):
                     base_url = f"http://{args.vllm_server_host}:{args.vllm_server_port}"
                 self.vllm_client = VLLMClient(base_url=base_url, connection_timeout=args.vllm_server_timeout)
                 self.vllm_client.init_communicator()
-            
-            #TODO 只处理这里
+
             elif self.vllm_mode == "colocate":
                 # Make sure vllm_tensor_parallel_size group size evenly divides the world size - each group should have
                 # the same number of ranks
@@ -653,7 +650,6 @@ class GRPOTrainer_agent_qwen(Trainer):
                         f"vllm_tensor_parallel_size ({self.vllm_tensor_parallel_size}) must divide world size "
                         f"({self.accelerator.num_processes}) evenly."
                     )
-                # 不处理
                 if self.vllm_tensor_parallel_size > 1:
                     # Create subgroups of ranks for TP, each group with `vllm_tensor_parallel_size` ranks.
                     # For example, if world_size=8 and vllm_tensor_parallel_size=2 → groups: [0,1], [2,3], [4,5], [6,7]
@@ -664,8 +660,6 @@ class GRPOTrainer_agent_qwen(Trainer):
                         ]
                     )
 
-
-                # TODO 变成单model取样
 
                 self.agent = vllmAgentWrapper(
                     processor=self.processing_class,
@@ -734,8 +728,7 @@ class GRPOTrainer_agent_qwen(Trainer):
                     self.reward_funcs[i] = self.accelerator.prepare_model(
                         reward_func, evaluation_mode=True, device_placement=True
                     )
-        
-        breakpoint()
+
 
     def _set_signature_columns_if_needed(self):
         # If `self.args.remove_unused_columns` is True, non-signature columns are removed.
@@ -879,7 +872,7 @@ class GRPOTrainer_agent_qwen(Trainer):
                             ],
                             dim=1
                 )))
-            
+
             visual_inputs_batch["pixel_values_videos"] = visual_inputs["pixel_values_videos"][pixel_values_videos_offset : pixel_values_videos_offset + local_offset]
             visual_inputs_batch["video_grid_thw"] = visual_inputs["video_grid_thw"][i * video_per_sentence : ( i + batch_size ) * video_per_sentence]
             visual_inputs_batch["second_per_grid_ts"] = visual_inputs["second_per_grid_ts"][i * video_per_sentence : ( i + batch_size ) * video_per_sentence]
@@ -887,7 +880,7 @@ class GRPOTrainer_agent_qwen(Trainer):
 
             # We add 1 to `logits_to_keep` because the last logits of the sequence is later excluded
             logits = model(
-                input_ids=input_ids_batch, 
+                input_ids=input_ids_batch,
                 attention_mask=attention_mask_batch,
                 **visual_inputs_batch,
             ).logits[ : , -logits_to_keep - 1 : -1 , : ] # logits = logits[:, :-1, :]  # (B, L-1, V), exclude the last logit: it corresponds to the next token pred
@@ -1033,7 +1026,7 @@ class GRPOTrainer_agent_qwen(Trainer):
         else:
             # In evaluation, there is neither batch grouping for generation, nor multiple iterations, hence
             # local generation batch == local eval batch
-            inputs = self._generate_and_score_completions(generation_batch) #TODO EVAL PIPELINE
+            inputs = self._generate_and_score_completions(generation_batch)
         return inputs
 
     def _generate_and_score_completions(
@@ -1046,14 +1039,14 @@ class GRPOTrainer_agent_qwen(Trainer):
         prompts_text = [x["prompts_text"] for x in inputs]
 
         image_inputs, video_inputs, video_kwargs = process_vision_info(
-            prompts, 
+            prompts,
             return_video_kwargs=True
         )
 
         prompt_inputs = self.processing_class(
             text=prompts_text,
             images=image_inputs,
-            videos=video_inputs, 
+            videos=video_inputs,
             padding=True,
             return_tensors="pt",
             padding_side="left",
@@ -1061,7 +1054,7 @@ class GRPOTrainer_agent_qwen(Trainer):
             )
 
         prompt_inputs = super()._prepare_inputs(prompt_inputs)
-        
+
         (
             prompt_ids,
             prompt_mask,
@@ -1075,7 +1068,7 @@ class GRPOTrainer_agent_qwen(Trainer):
             "video_grid_thw" : prompt_inputs["video_grid_thw"],
             "second_per_grid_ts" :  prompt_inputs["second_per_grid_ts"],
         }
-        
+
         if self.max_prompt_length is not None:
             prompt_ids = prompt_ids[:, -self.max_prompt_length :]
             prompt_mask = prompt_mask[:, -self.max_prompt_length :]
@@ -1146,12 +1139,8 @@ class GRPOTrainer_agent_qwen(Trainer):
                     all_prompts_text = prompts_text
 
                 with profiling_context(self, "vLLM.generate"):
-                    
-                    # 这里希望 LLM生成多轮对话结果
-
-                    all_outputs = self.agent.make_experience_list(all_prompts_text, is_eval=False)#sampling_params=sampling_params, use_tqdm=False)
-
-                    # all_outputs = self.llm.generate(all_prompts_text, sampling_params=sampling_params, use_tqdm=False)
+                    # Generate multi-turn dialogue results via the agent wrapper
+                    all_outputs = self.agent.make_experience_list(all_prompts_text, is_eval=False)
 
                 completion_ids = [output.token_ids for outputs in all_outputs for output in outputs.outputs]
 
@@ -1177,10 +1166,10 @@ class GRPOTrainer_agent_qwen(Trainer):
                     else nullcontext()
                 ):
                     prompt_completion_ids = unwrapped_model.generate(
-                        prompt_ids, 
-                        attention_mask=prompt_mask, 
+                        prompt_ids,
+                        attention_mask=prompt_mask,
                         **visual_inputs,
-                        generation_config=self.generation_config, 
+                        generation_config=self.generation_config,
                     )
 
             # Compute prompt length and extract completion ids
@@ -1214,7 +1203,7 @@ class GRPOTrainer_agent_qwen(Trainer):
 
         logits_to_keep = completion_ids.size(1)  # we only need to compute the logits for the completion tokens
         batch_size = self.args.per_device_train_batch_size if mode == "train" else self.args.per_device_eval_batch_size
-        
+
         with torch.no_grad():
             # When using num_iterations == 1 and steps_per_generation <= gradient_accumulation_steps
             # old_per_token_logps == per_token_logps, so we can skip it's computation here, and use
@@ -1284,7 +1273,7 @@ class GRPOTrainer_agent_qwen(Trainer):
 
         # Apply weights to each reward function's output and sum
         rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0)).nansum(dim=1)
-        
+
         # Compute grouped-wise rewards
         mean_grouped_rewards = rewards.view(-1, self.num_generations).mean(dim=1)
         std_grouped_rewards = rewards.view(-1, self.num_generations).std(dim=1)
@@ -1346,12 +1335,12 @@ class GRPOTrainer_agent_qwen(Trainer):
 
         visual_inputs = self.evenly_split_visual_inputs(visual_inputs, len(prompt_ids))
         (
-            pixel_values_videos, 
-            video_grid_thw, 
+            pixel_values_videos,
+            video_grid_thw,
             second_per_grid_ts
         ) = (
-                visual_inputs["pixel_values_videos"], 
-                visual_inputs["video_grid_thw"], 
+                visual_inputs["pixel_values_videos"],
+                visual_inputs["video_grid_thw"],
                 visual_inputs["second_per_grid_ts"]
             )
         return {
@@ -1370,14 +1359,14 @@ class GRPOTrainer_agent_qwen(Trainer):
 
         visual_inputs["pixel_values_videos"] = \
         visual_inputs["pixel_values_videos"].reshape(
-            batch_size, 
+            batch_size,
             len(visual_inputs["pixel_values_videos"]) // batch_size,
             -1
         )
 
         visual_inputs["video_grid_thw"] = \
         visual_inputs["video_grid_thw"].reshape(
-            batch_size, 
+            batch_size,
             len(visual_inputs["video_grid_thw"]) // batch_size,
             -1
         )
@@ -1387,11 +1376,11 @@ class GRPOTrainer_agent_qwen(Trainer):
 
         visual_inputs["second_per_grid_ts"] = \
         visual_inputs["second_per_grid_ts"].reshape(
-            batch_size, 
+            batch_size,
             len(visual_inputs["second_per_grid_ts"]) // batch_size,
             -1
         )
-        
+
         return visual_inputs
 
     def compute_liger_loss(self, unwrapped_model, inputs):

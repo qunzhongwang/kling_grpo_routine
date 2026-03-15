@@ -7,7 +7,7 @@ from .loss import (
     LogExpLoss,
     PairWiseLoss,
     PolicyLoss,
-    SFTLoss, 
+    SFTLoss,
     PRMLoss,
     ValueLoss,
     VanillaKTOLoss,

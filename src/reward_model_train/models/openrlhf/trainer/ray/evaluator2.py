@@ -63,7 +63,7 @@ class Evaluator2(Evaluator):
             self.reward_fn,
             vllm_engines=self.vllm_engines,
             packing_samples=self.strategy.args.packing_samples,
-            gt_path=self.gt_path, 
+            gt_path=self.gt_path,
             modelfamily=self.modelfamily
         )
 
@@ -138,7 +138,7 @@ class Evaluator2(Evaluator):
         args = self.strategy.args
         eval_dp = getattr(args, "eval_data", None)
         assert eval_dp, f"args.eval_data: {eval_dp} is invalid"
-        # if eval_dp: 
+        # if eval_dp:
         eval_data = blending_datasets(
             eval_dp,
             args.prompt_data_probs,
@@ -148,7 +148,7 @@ class Evaluator2(Evaluator):
             return_eval=False,
             train_split=args.prompt_split,
         )
-        
+
         self.eval_data = PromptDataset(
             eval_data, self.tokenizer, strategy, input_template=args.input_template, is_eval=True, processor=self.processor
         )
@@ -265,16 +265,16 @@ class Evaluator2(Evaluator):
             max_num = args.max_ckpt_num
             if self.strategy.is_rank_0():
                 while True:
-                    save_dir = args.ckpt_path 
+                    save_dir = args.ckpt_path
                     subdirs = sorted(
                         [
                             (os.path.join(save_dir, d), os.path.getmtime(os.path.join(save_dir, d)))
                             for d in os.listdir(save_dir)
-                            if d.endswith('hf') and os.path.isdir(os.path.join(save_dir, d)) 
+                            if d.endswith('hf') and os.path.isdir(os.path.join(save_dir, d))
                         ],
                         key=lambda x: x[1],
                     ) # only take folders that ends with hf
-                    
+
                     if len(subdirs) >= max_num: # or total_size > MAX_SIZE:
                         oldest_dir = subdirs[0][0]
                         if os.path.exists(oldest_dir):
@@ -286,6 +286,6 @@ class Evaluator2(Evaluator):
         if not self.disable_ds_ckpt:
             if self.critic_train_remote:
                 ray.get(ref)
-                
+
         return save_path
-        
+
