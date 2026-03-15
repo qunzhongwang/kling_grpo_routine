@@ -1,0 +1,39 @@
+services:
+  train:
+    build: .
+    volumes:
+      - ${DATA_DIR:-/data}:/data
+      - ${MODEL_DIR:-/models}:/models
+      - ${OUTPUT_DIR:-./output}:/output
+    environment:
+      - WANDB_API_KEY=${WANDB_API_KEY}
+      - WANDB_ENTITY=KwaiAiTraining
+      - NCCL_DEBUG=INFO
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ipc: host
+    shm_size: "64gb"
+    command: >
+      accelerate launch --config_file configs/deepspeed/zero2_8gpu.yaml
+      -m reward_model_train.cli.grpo_train
+      --dataset_name /data/dataset
+      --model_name_or_path /models/Qwen2.5-VL-7B-Instruct
+      --output_dir /output
+      --do_train True
+
+  dev:
+    extends: train
+    volumes:
+      - ./src:/app/src
+      - ./trl_fork:/app/trl_fork
+      - ./configs:/app/configs
+      - ./scripts:/app/scripts
+      - ${DATA_DIR:-/data}:/data
+      - ${MODEL_DIR:-/models}:/models
+      - ${OUTPUT_DIR:-./output}:/output
+    command: bash

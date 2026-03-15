@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "reward-model-train"
+version = "0.2.0"
+description = "Qwen VLM GRPO reward model training framework"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+
+dependencies = [
+    "torch>=2.1.0",
+    "transformers>=4.45.0",
+    "datasets>=2.18.0",
+    "accelerate>=0.30.0",
+    "peft>=0.10.0",
+    "deepspeed>=0.14.0",
+    "wandb>=0.16.0",
+    "Pillow>=10.0.0",
+    "torchvision>=0.16.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "packaging",
+    "requests",
+]
+
+[project.optional-dependencies]
+vllm = ["vllm>=0.4.0", "ray>=2.10.0"]
+dev = ["ruff", "pytest", "pre-commit"]
+all = ["reward-model-train[vllm,dev]"]
+
+[project.scripts]
+rmt-grpo = "reward_model_train.cli.grpo_train:main_cli"
+rmt-agent-grpo = "reward_model_train.cli.agent_grpo_train:main_cli"
+rmt-sft = "reward_model_train.cli.sft_train:main_cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reward_model_train", "trl_fork/trl"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+"trl_fork" = ""
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
